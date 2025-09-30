@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,6 +16,16 @@ const AdminLogin = () => {
   const navigate = useNavigate();
   const { toast } = useToast();
 
+  // Debug: Check environment variables on mount
+  useEffect(() => {
+    console.log('AdminLogin - Environment Variables:', {
+      VITE_ADMIN_EMAIL: import.meta.env.VITE_ADMIN_EMAIL,
+      VITE_ADMIN_PASSWORD: import.meta.env.VITE_ADMIN_PASSWORD,
+      hasEmail: !!import.meta.env.VITE_ADMIN_EMAIL,
+      hasPassword: !!import.meta.env.VITE_ADMIN_PASSWORD
+    });
+  }, []);
+
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -25,13 +35,19 @@ const AdminLogin = () => {
       const hardcodedPassword = import.meta.env.VITE_ADMIN_PASSWORD;
       const lowerEmail = email.trim().toLowerCase();
 
+      console.log('Debug - Environment check:', {
+        hasHardcodedEmail: !!hardcodedEmail,
+        hasHardcodedPassword: !!hardcodedPassword,
+        submittedEmail: lowerEmail,
+        hardcodedEmailValue: hardcodedEmail,
+        emailMatch: lowerEmail === hardcodedEmail,
+        passwordMatch: password === hardcodedPassword,
+        isWhitelisted: isAdminEmail(email)
+      });
+
       const hardcodedMatch = hardcodedEmail && hardcodedPassword
         ? lowerEmail === hardcodedEmail && password === hardcodedPassword
         : false;
-
-      if (!hardcodedMatch && !isAdminEmail(email)) {
-        throw new Error('This email is not authorized for admin access.');
-      }
 
       if (hardcodedMatch) {
         toast({
@@ -41,6 +57,10 @@ const AdminLogin = () => {
         navigate('/admin/dashboard');
         setLoading(false);
         return;
+      }
+
+      if (!isAdminEmail(email)) {
+        throw new Error('This email is not authorized for admin access.');
       }
 
       const { error: authError } = await supabase.auth.signInWithPassword({
