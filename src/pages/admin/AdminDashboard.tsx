@@ -16,7 +16,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
-import { getAdminProfile } from '@/services/admin/admin-service';
+import { isAdminEmail } from '@/lib/utils';
 
 interface DashboardStats {
   totalTeams: number;
@@ -42,7 +42,7 @@ const AdminDashboard = () => {
   useEffect(() => {
     if (authLoading) return;
 
-    const verifyAdmin = async () => {
+    const enforceAdminGuard = async () => {
       if (!user?.email) {
         toast({
           variant: 'destructive',
@@ -54,36 +54,23 @@ const AdminDashboard = () => {
         return;
       }
 
-      try {
-        const adminProfile = await getAdminProfile(user.email);
-        if (!adminProfile || adminProfile.is_active === false) {
-          toast({
-            variant: 'destructive',
-            title: 'Access denied',
-            description: 'Your account does not have admin privileges.',
-          });
-          await signOut();
-          navigate('/admin');
-          return;
-        }
-
-        setAuthorized(true);
-      } catch (error) {
-        console.error('Error verifying admin access:', error);
+      if (!isAdminEmail(user.email)) {
         toast({
           variant: 'destructive',
-          title: 'Unable to verify admin access',
-          description: 'Please try signing in again.',
+          title: 'Access denied',
+          description: 'This account is not authorized for admin access.',
         });
         await signOut();
         navigate('/admin');
-        return;
-      } finally {
         setAuthorizing(false);
+        return;
       }
+
+      setAuthorized(true);
+      setAuthorizing(false);
     };
 
-    verifyAdmin();
+    enforceAdminGuard();
   }, [authLoading, user?.email, navigate, toast, signOut]);
 
   useEffect(() => {
