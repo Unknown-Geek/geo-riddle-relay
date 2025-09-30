@@ -6,8 +6,14 @@ export function cn(...inputs: ClassValue[]) {
 }
 
 export function getAdminWhitelist() {
-  const raw = import.meta.env.VITE_ADMIN_EMAIL_WHITELIST ?? "";
-  return raw
+  const explicitList = import.meta.env.VITE_ADMIN_EMAIL_WHITELIST;
+  const singleAdmin = import.meta.env.VITE_ADMIN_EMAIL;
+
+  const source = explicitList && explicitList.trim().length > 0
+    ? explicitList
+    : singleAdmin ?? "";
+
+  return source
     .split(",")
     .map((entry) => entry.trim().toLowerCase())
     .filter(Boolean);
