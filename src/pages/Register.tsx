@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,7 +19,6 @@ const Register = () => {
     avatarUrl: '',
   });
   const [loading, setLoading] = useState(false);
-  const { signUp, signIn } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -63,28 +61,42 @@ const Register = () => {
     setLoading(true);
 
     try {
-      // First create the user account
-      const { error: authError } = await signUp(formData.leaderEmail, formData.password);
+      // Check if team name already exists
+      const { data: existingTeam } = await supabase
+        .from('teams')
+        .select('name')
+        .eq('name', formData.teamName)
+        .single();
 
-      if (authError) {
-        setLoading(false);
-        return;
-      }
-
-      const { error: signInError } = await signIn(formData.leaderEmail, formData.password);
-
-      if (signInError) {
+      if (existingTeam) {
         toast({
           variant: "destructive",
-          title: "Unable to complete sign in",
-          description: signInError.message,
+          title: "Team name taken",
+          description: "Please choose a different team name.",
         });
         setLoading(false);
         return;
       }
 
-      // Create team record
-      const { error: teamError } = await supabase
+      // Check if leader email already registered
+      const { data: existingEmail } = await supabase
+        .from('teams')
+        .select('leader_email')
+        .eq('leader_email', formData.leaderEmail)
+        .single();
+
+      if (existingEmail) {
+        toast({
+          variant: "destructive",
+          title: "Email already registered",
+          description: "This email is already registered with another team.",
+        });
+        setLoading(false);
+        return;
+      }
+
+      // Create team record directly (no auth required)
+      const { error: teamError, data: teamData } = await supabase
         .from('teams')
         .insert({
           name: formData.teamName,
@@ -93,17 +105,28 @@ const Register = () => {
           status: 'pending',
           team_color: formData.teamColor,
           avatar_url: formData.avatarUrl || null,
-        });
+        })
+        .select()
+        .single();
 
       if (teamError) {
+        console.error('Team registration error:', teamError);
         toast({
           variant: "destructive",
           title: "Team registration failed",
-          description: teamError.message,
+          description: teamError.message || "Failed to create team. Please try again.",
         });
         setLoading(false);
         return;
       }
+
+      // Store team info in localStorage for dashboard access
+      localStorage.setItem('currentTeam', JSON.stringify({
+        id: teamData.id,
+        name: teamData.name,
+        leader_email: teamData.leader_email,
+        status: teamData.status
+      }));
 
       toast({
         title: "Registration successful!",
@@ -112,11 +135,14 @@ const Register = () => {
 
       navigate('/dashboard');
     } catch (error) {
+      console.error('Registration error:', error);
       toast({
         variant: "destructive",
         title: "Registration failed",
         description: "An unexpected error occurred. Please try again.",
       });
+      setLoading(false);
+    } finally {
       setLoading(false);
     }
   };
