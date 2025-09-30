@@ -41,7 +41,7 @@ async function clearGameData() {
   ];
 
   for (const table of tables) {
-    const { error } = await supabase.from(table).delete().neq('id', '');
+    const { error } = await supabase.from(table).delete().gt('created_at', '1900-01-01');
     if (error) {
       throw new Error(`Failed to clear table ${table}: ${error.message}`);
     }
