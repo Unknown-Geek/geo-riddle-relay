@@ -6,6 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Shield, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { supabase } from '@/integrations/supabase/client';
+import { getAdminProfile } from '@/services/admin/admin-service';
 
 const AdminLogin = () => {
   const [email, setEmail] = useState('');
@@ -18,24 +20,45 @@ const AdminLogin = () => {
     e.preventDefault();
     setLoading(true);
 
-    // TODO: Implement admin authentication
-    // For now, just simulate authentication
-    setTimeout(() => {
-      if (email === 'admin@campus.edu' && password === 'admin123') {
-        toast({
-          title: "Welcome back!",
-          description: "You have successfully signed in as admin.",
-        });
-        navigate('/admin/dashboard');
-      } else {
-        toast({
-          variant: "destructive",
-          title: "Authentication failed",
-          description: "Invalid admin credentials.",
-        });
+    try {
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (authError) {
+        throw authError;
       }
+
+      const adminProfile = await getAdminProfile(email);
+
+      if (!adminProfile || adminProfile.is_active === false) {
+        await supabase.auth.signOut();
+        throw new Error('This account does not have admin access.');
+      }
+
+      await supabase
+        .from('admin_users')
+        .update({ last_login: new Date().toISOString() })
+        .eq('id', adminProfile.id)
+        .select();
+
+      toast({
+        title: "Welcome back!",
+        description: "Administrative access granted.",
+      });
+      navigate('/admin/dashboard');
+    } catch (error: any) {
+      toast({
+        variant: "destructive",
+        title: "Authentication failed",
+        description: error?.message ?? 'Unable to sign in as admin.',
+      });
       setLoading(false);
-    }, 1000);
+      return;
+    }
+
+    setLoading(false);
   };
 
   return (
@@ -94,11 +117,6 @@ const AdminLogin = () => {
             </p>
           </div>
           
-          <div className="mt-4 text-center">
-            <p className="text-xs text-muted-foreground">
-              Demo credentials: admin@campus.edu / admin123
-            </p>
-          </div>
         </CardContent>
       </Card>
     </div>

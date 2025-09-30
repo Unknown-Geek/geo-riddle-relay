@@ -3,18 +3,20 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Shield, 
-  Users, 
-  MapPin, 
-  Trophy, 
-  Settings, 
+import {
+  Shield,
+  Users,
+  MapPin,
+  Trophy,
+  Settings,
   LogOut,
   Plus,
-  Activity
+  Activity,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { getAdminProfile } from '@/services/admin/admin-service';
 
 interface DashboardStats {
   totalTeams: number;
@@ -24,21 +26,72 @@ interface DashboardStats {
 }
 
 const AdminDashboard = () => {
+  const { user, loading: authLoading, signOut } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
     totalTeams: 0,
     activeTeams: 0,
     completedTeams: 0,
-    totalCheckpoints: 0
+    totalCheckpoints: 0,
   });
-  const [loading, setLoading] = useState(true);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [authorizing, setAuthorizing] = useState(true);
+  const [authorized, setAuthorized] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
+    if (authLoading) return;
+
+    const verifyAdmin = async () => {
+      if (!user?.email) {
+        toast({
+          variant: 'destructive',
+          title: 'Admin access required',
+          description: 'Please sign in with an admin account.',
+        });
+        navigate('/admin');
+        setAuthorizing(false);
+        return;
+      }
+
+      try {
+        const adminProfile = await getAdminProfile(user.email);
+        if (!adminProfile || adminProfile.is_active === false) {
+          toast({
+            variant: 'destructive',
+            title: 'Access denied',
+            description: 'Your account does not have admin privileges.',
+          });
+          await signOut();
+          navigate('/admin');
+          return;
+        }
+        setAuthorized(true);
+      } catch (error) {
+        console.error('Error verifying admin access:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Unable to verify admin access',
+          description: 'Please try signing in again.',
+        });
+        await signOut();
+        navigate('/admin');
+        return;
+      } finally {
+        setAuthorizing(false);
+      }
+    };
+
+    verifyAdmin();
+  }, [authLoading, user?.email, navigate, toast, signOut]);
+
+  useEffect(() => {
+    if (!authorized) return;
     fetchDashboardStats();
-  }, []);
+  }, [authorized]);
 
   const fetchDashboardStats = async () => {
+    setStatsLoading(true);
     try {
       // Fetch team statistics
       const { data: teams, error: teamsError } = await supabase
@@ -68,7 +121,7 @@ const AdminDashboard = () => {
         activeTeams,
         completedTeams,
         totalCheckpoints
-      });
+          totalCheckpoints,
     } catch (error) {
       console.error('Error fetching dashboard stats:', error);
       toast({
@@ -78,19 +131,20 @@ const AdminDashboard = () => {
       });
     } finally {
       setLoading(false);
-    }
+        setStatsLoading(false);
   };
 
   const handleLogout = () => {
-    toast({
-      title: "Logged out",
-      description: "You have been logged out of the admin panel.",
-    });
-    navigate('/admin');
-  };
+    const handleLogout = async () => {
+      await signOut();
+      toast({
+        title: "Logged out",
+        description: "You have been logged out of the admin panel.",
+      });
+      navigate('/admin');
 
   if (loading) {
-    return (
+    if (authorizing || statsLoading) {
       <div className="min-h-screen bg-gradient-hero flex items-center justify-center">
         <div className="text-center space-y-4">
           <Shield className="h-12 w-12 text-primary mx-auto animate-pulse" />

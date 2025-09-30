@@ -15,10 +15,12 @@ const Register = () => {
     leaderEmail: '',
     password: '',
     confirmPassword: '',
-    memberNames: ['', '', '', '']
+    memberNames: ['', '', '', ''],
+    teamColor: '#00d9ff',
+    avatarUrl: '',
   });
   const [loading, setLoading] = useState(false);
-  const { signUp } = useAuth();
+  const { signUp, signIn } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -49,11 +51,11 @@ const Register = () => {
     }
 
     const filledMembers = formData.memberNames.filter(name => name.trim() !== '');
-    if (filledMembers.length === 0) {
+    if (filledMembers.length < 4) {
       toast({
         variant: "destructive",
-        title: "Team members required",
-        description: "Please add at least one team member.",
+        title: "Team roster incomplete",
+        description: "You need exactly 4 player names to register (including the leader).",
       });
       return;
     }
@@ -63,8 +65,20 @@ const Register = () => {
     try {
       // First create the user account
       const { error: authError } = await signUp(formData.leaderEmail, formData.password);
-      
+
       if (authError) {
+        setLoading(false);
+        return;
+      }
+
+      const { error: signInError } = await signIn(formData.leaderEmail, formData.password);
+
+      if (signInError) {
+        toast({
+          variant: "destructive",
+          title: "Unable to complete sign in",
+          description: signInError.message,
+        });
         setLoading(false);
         return;
       }
@@ -76,7 +90,9 @@ const Register = () => {
           name: formData.teamName,
           leader_email: formData.leaderEmail,
           member_names: filledMembers,
-          status: 'pending'
+          status: 'pending',
+          team_color: formData.teamColor,
+          avatar_url: formData.avatarUrl || null,
         });
 
       if (teamError) {
@@ -91,10 +107,10 @@ const Register = () => {
 
       toast({
         title: "Registration successful!",
-        description: "Your team has been registered. Please check your email to confirm your account.",
+        description: "Your team is ready. Head to your dashboard to begin.",
       });
 
-      navigate('/');
+      navigate('/dashboard');
     } catch (error) {
       toast({
         variant: "destructive",
@@ -145,6 +161,36 @@ const Register = () => {
                       required
                       className="bg-input border-border"
                     />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="teamColor" className="text-foreground">Team Color</Label>
+                      <div className="flex items-center gap-3">
+                        <Input
+                          id="teamColor"
+                          type="color"
+                          value={formData.teamColor}
+                          onChange={(e) => handleInputChange('teamColor', e.target.value)}
+                          className="h-12 w-20 cursor-pointer border-border"
+                        />
+                        <div>
+                          <p className="text-sm text-muted-foreground">Pick a highlight color for your team badge.</p>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="avatarUrl" className="text-foreground">Team Avatar (optional)</Label>
+                      <Input
+                        id="avatarUrl"
+                        type="url"
+                        placeholder="https://example.com/avatar.png"
+                        value={formData.avatarUrl}
+                        onChange={(e) => handleInputChange('avatarUrl', e.target.value)}
+                        className="bg-input border-border"
+                      />
+                      <p className="text-xs text-muted-foreground">Use a square image for best results.</p>
+                    </div>
                   </div>
                 </div>
 
@@ -212,6 +258,7 @@ const Register = () => {
                           placeholder="Team member name"
                           value={name}
                           onChange={(e) => handleMemberChange(index, e.target.value)}
+                          required
                           className="bg-input border-border"
                         />
                       </div>

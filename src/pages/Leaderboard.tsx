@@ -3,18 +3,12 @@ import { Link } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Compass, Trophy, Medal, Award, ArrowLeft } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { getLeaderboard, subscribeToLeaderboard, type TeamRow } from '@/services/player-service';
 
-interface TeamRanking {
-  id: string;
-  name: string;
-  current_score: number;
-  status: string;
-  member_names: string[];
-  team_color: string;
-}
+type TeamRanking = Pick<TeamRow, 'id' | 'name' | 'current_score' | 'status' | 'member_names' | 'team_color' | 'avatar_url'>;
 
 const Leaderboard = () => {
   const [teams, setTeams] = useState<TeamRanking[]>([]);
@@ -22,29 +16,40 @@ const Leaderboard = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchLeaderboard();
-  }, []);
+    const load = async () => {
+      try {
+        const data = await getLeaderboard();
+        setTeams(data ?? []);
+      } catch (error: any) {
+        toast({
+          variant: 'destructive',
+          title: 'Error loading leaderboard',
+          description: error?.message ?? 'Please try again.',
+        });
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    load();
+
+    const unsubscribe = subscribeToLeaderboard(() => {
+      load();
+    });
+
+    return unsubscribe;
+  }, [toast]);
 
   const fetchLeaderboard = async () => {
     try {
-      const { data, error } = await supabase
-        .from('teams')
-        .select('id, name, current_score, status, member_names, team_color')
-        .order('current_score', { ascending: false });
-
-      if (error) {
-        toast({
-          variant: "destructive",
-          title: "Error loading leaderboard",
-          description: error.message,
-        });
-      } else {
-        setTeams(data || []);
-      }
-    } catch (error) {
-      console.error('Error fetching leaderboard:', error);
-    } finally {
-      setLoading(false);
+      const data = await getLeaderboard();
+      setTeams(data ?? []);
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Error refreshing leaderboard',
+        description: error?.message ?? 'Please try again.',
+      });
     }
   };
 
@@ -142,18 +147,37 @@ const Leaderboard = () => {
                           {/* Team Info */}
                           <div className="space-y-1">
                             <div className="flex items-center space-x-3">
-                              <h3 className="text-xl font-bold text-foreground">{team.name}</h3>
-                              <div 
-                                className="w-4 h-4 rounded-full border-2 border-border"
-                                style={{ backgroundColor: team.team_color }}
-                              ></div>
-                              <Badge variant={getStatusBadgeVariant(team.status)}>
-                                {team.status}
-                              </Badge>
+                              <Avatar className="h-10 w-10 border"
+                                style={{ borderColor: team.team_color ?? '#00d9ff' }}>
+                                {team.avatar_url ? (
+                                  <AvatarImage src={team.avatar_url} alt={team.name} />
+                                ) : (
+                                  <AvatarFallback>
+                                    {team.name
+                                      .split(' ')
+                                      .map((n) => n[0])
+                                      .join('')
+                                      .slice(0, 2)
+                                      .toUpperCase()}
+                                  </AvatarFallback>
+                                )}
+                              </Avatar>
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <h3 className="text-xl font-bold text-foreground">{team.name}</h3>
+                                  <div
+                                    className="w-4 h-4 rounded-full border-2 border-border"
+                                    style={{ backgroundColor: team.team_color }}
+                                  ></div>
+                                  <Badge variant={getStatusBadgeVariant(team.status)}>
+                                    {team.status}
+                                  </Badge>
+                                </div>
+                                <p className="text-sm text-muted-foreground">
+                                  {team.member_names.length} member{team.member_names.length !== 1 ? 's' : ''}
+                                </p>
+                              </div>
                             </div>
-                            <p className="text-sm text-muted-foreground">
-                              {team.member_names.length} member{team.member_names.length !== 1 ? 's' : ''}
-                            </p>
                           </div>
                         </div>
 
@@ -186,12 +210,15 @@ const Leaderboard = () => {
             </div>
           )}
 
-          <div className="mt-8 text-center">
+          <div className="mt-8 text-center flex justify-center gap-3">
             <Link to="/">
               <Button variant="outline" className="glass-card">
                 Back to Home
               </Button>
             </Link>
+            <Button variant="ghost" onClick={fetchLeaderboard} className="glass-card">
+              Refresh
+            </Button>
           </div>
         </div>
       </div>
