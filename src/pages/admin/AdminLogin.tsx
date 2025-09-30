@@ -6,8 +6,6 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Shield, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
-import { isAdminEmail } from '@/lib/utils';
 
 const AdminLogin = () => {
   const [email, setEmail] = useState('');
@@ -35,54 +33,15 @@ const AdminLogin = () => {
       const hardcodedPassword = import.meta.env.VITE_ADMIN_PASSWORD;
       const lowerEmail = email.trim().toLowerCase();
 
-      console.log('Debug - Environment check:', {
-        hasHardcodedEmail: !!hardcodedEmail,
-        hasHardcodedPassword: !!hardcodedPassword,
-        submittedEmail: lowerEmail,
-        hardcodedEmailValue: hardcodedEmail,
-        emailMatch: lowerEmail === hardcodedEmail,
-        passwordMatch: password === hardcodedPassword,
-        isWhitelisted: isAdminEmail(email)
-      });
+      if (!hardcodedEmail || !hardcodedPassword) {
+        throw new Error('Admin credentials not configured.');
+      }
 
       const emailMatches = lowerEmail === hardcodedEmail;
       const passwordMatches = password === hardcodedPassword;
-      const hardcodedMatch = hardcodedEmail && hardcodedPassword && emailMatches && passwordMatches;
 
-      console.log('Hardcoded Match Debug:', {
-        hardcodedEmail,
-        hardcodedPassword,
-        lowerEmail,
-        password,
-        emailMatches,
-        passwordMatches,
-        hardcodedMatch
-      });
-
-      if (hardcodedMatch) {
-        console.log('Taking hardcoded bypass route');
-        toast({
-          title: "Welcome back!",
-          description: "Administrative access granted (temporary bypass).",
-        });
-        navigate('/admin/dashboard');
-        setLoading(false);
-        return;
-      }
-
-      console.log('Hardcoded match failed, proceeding to Supabase auth');
-
-      if (!isAdminEmail(email)) {
-        throw new Error('This email is not authorized for admin access.');
-      }
-
-      const { error: authError } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-
-      if (authError) {
-        throw authError;
+      if (!emailMatches || !passwordMatches) {
+        throw new Error('Invalid admin credentials.');
       }
 
       toast({
