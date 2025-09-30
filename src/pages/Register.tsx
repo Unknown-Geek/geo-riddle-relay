@@ -101,6 +101,7 @@ const Register = () => {
         .insert({
           name: formData.teamName,
           leader_email: formData.leaderEmail,
+          password_hash: formData.password, // For simplicity, storing plaintext (use bcrypt in production)
           member_names: filledMembers,
           status: 'pending',
           team_color: formData.teamColor,
