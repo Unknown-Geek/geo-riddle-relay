@@ -7,7 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Shield, Lock } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { getAdminProfile } from '@/services/admin/admin-service';
+import { isAdminEmail } from '@/lib/utils';
 
 const AdminLogin = () => {
   const [email, setEmail] = useState('');
@@ -21,6 +21,10 @@ const AdminLogin = () => {
     setLoading(true);
 
     try {
+      if (!isAdminEmail(email)) {
+        throw new Error('This email is not authorized for admin access.');
+      }
+
       const { error: authError } = await supabase.auth.signInWithPassword({
         email,
         password,
@@ -29,19 +33,6 @@ const AdminLogin = () => {
       if (authError) {
         throw authError;
       }
-
-      const adminProfile = await getAdminProfile(email);
-
-      if (!adminProfile || adminProfile.is_active === false) {
-        await supabase.auth.signOut();
-        throw new Error('This account does not have admin access.');
-      }
-
-      await supabase
-        .from('admin_users')
-        .update({ last_login: new Date().toISOString() })
-        .eq('id', adminProfile.id)
-        .select();
 
       toast({
         title: "Welcome back!",
