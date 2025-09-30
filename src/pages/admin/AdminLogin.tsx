@@ -21,8 +21,26 @@ const AdminLogin = () => {
     setLoading(true);
 
     try {
-      if (!isAdminEmail(email)) {
+      const hardcodedEmail = import.meta.env.VITE_ADMIN_EMAIL?.toLowerCase();
+      const hardcodedPassword = import.meta.env.VITE_ADMIN_PASSWORD;
+      const lowerEmail = email.trim().toLowerCase();
+
+      const hardcodedMatch = hardcodedEmail && hardcodedPassword
+        ? lowerEmail === hardcodedEmail && password === hardcodedPassword
+        : false;
+
+      if (!hardcodedMatch && !isAdminEmail(email)) {
         throw new Error('This email is not authorized for admin access.');
+      }
+
+      if (hardcodedMatch) {
+        toast({
+          title: "Welcome back!",
+          description: "Administrative access granted (temporary bypass).",
+        });
+        navigate('/admin/dashboard');
+        setLoading(false);
+        return;
       }
 
       const { error: authError } = await supabase.auth.signInWithPassword({

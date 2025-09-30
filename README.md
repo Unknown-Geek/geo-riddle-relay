@@ -93,6 +93,10 @@ Environment variables that can be overridden when running the script:
 
 After the script reports success, you can log in to `/admin` with the seeded credentials.
 
+### Temporary hardcoded bypass
+
+While Supabase credentials are being sorted out, the admin login also checks `VITE_ADMIN_EMAIL` and `VITE_ADMIN_PASSWORD` directly on the client. If both match the submitted credentials, the app short-circuits to the dashboard without hitting Supabase. Remove these env variables (or set them to empty strings) once your Supabase Auth flow is working to disable the bypass.
+
 ## How can I deploy this project?
 
 Simply open [Lovable](https://lovable.dev/projects/5594c08e-c0b2-4908-89db-d1d73698c8d0) and click on Share -> Publish.
