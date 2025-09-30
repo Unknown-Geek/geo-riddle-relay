@@ -45,11 +45,22 @@ const AdminLogin = () => {
         isWhitelisted: isAdminEmail(email)
       });
 
-      const hardcodedMatch = hardcodedEmail && hardcodedPassword
-        ? lowerEmail === hardcodedEmail && password === hardcodedPassword
-        : false;
+      const emailMatches = lowerEmail === hardcodedEmail;
+      const passwordMatches = password === hardcodedPassword;
+      const hardcodedMatch = hardcodedEmail && hardcodedPassword && emailMatches && passwordMatches;
+
+      console.log('Hardcoded Match Debug:', {
+        hardcodedEmail,
+        hardcodedPassword,
+        lowerEmail,
+        password,
+        emailMatches,
+        passwordMatches,
+        hardcodedMatch
+      });
 
       if (hardcodedMatch) {
+        console.log('Taking hardcoded bypass route');
         toast({
           title: "Welcome back!",
           description: "Administrative access granted (temporary bypass).",
@@ -58,6 +69,8 @@ const AdminLogin = () => {
         setLoading(false);
         return;
       }
+
+      console.log('Hardcoded match failed, proceeding to Supabase auth');
 
       if (!isAdminEmail(email)) {
         throw new Error('This email is not authorized for admin access.');
