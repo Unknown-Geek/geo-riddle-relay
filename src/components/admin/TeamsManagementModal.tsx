@@ -25,11 +25,11 @@ interface Team {
   name: string;
   leader_email: string;
   member_names: string[];
-  status: 'pending' | 'active' | 'completed' | 'disqualified';
-  current_score: number;
-  created_at: string;
-  completed_at?: string;
-  help_tokens_used: number;
+  status: 'pending' | 'active' | 'completed' | 'disqualified' | null;
+  current_score: number | null;
+  created_at: string | null;
+  completed_at?: string | null;
+  help_tokens_used: number | null;
 }
 
 interface TeamsManagementModalProps {
@@ -48,16 +48,16 @@ const TeamsManagementModal = ({ isOpen, onClose }: TeamsManagementModalProps) =>
       const { data, error } = await supabase
         .from('teams')
         .select('*')
-        .order('current_score', { ascending: false });
+        .order('created_at', { ascending: false });
 
       if (error) throw error;
       setTeams(data || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error loading teams:', error);
       toast({
         variant: 'destructive',
         title: 'Error',
-        description: 'Failed to load teams',
+        description: error.message || 'Failed to load teams',
       });
     } finally {
       setLoading(false);
@@ -186,8 +186,8 @@ const TeamsManagementModal = ({ isOpen, onClose }: TeamsManagementModalProps) =>
                       <div className="flex items-center justify-between">
                         <CardTitle className="text-lg">{team.name}</CardTitle>
                         <div className="flex items-center gap-2">
-                          <Badge className={getStatusColor(team.status)}>
-                            {team.status}
+                          <Badge className={getStatusColor(team.status || 'pending')}>
+                            {team.status || 'pending'}
                           </Badge>
                           <Button
                             variant="ghost"
@@ -222,13 +222,13 @@ const TeamsManagementModal = ({ isOpen, onClose }: TeamsManagementModalProps) =>
                           <div className="flex items-center gap-2">
                             <Trophy className="h-4 w-4 text-muted-foreground" />
                             <span className="text-sm font-medium">
-                              Score: {team.current_score}
+                              Score: {team.current_score || 0}
                             </span>
                           </div>
                           <div className="flex items-center gap-2">
                             <Clock className="h-4 w-4 text-muted-foreground" />
                             <span className="text-sm">
-                              Registered: {new Date(team.created_at).toLocaleDateString()}
+                              Registered: {team.created_at ? new Date(team.created_at).toLocaleDateString() : 'Unknown'}
                             </span>
                           </div>
                           {team.completed_at && (
@@ -237,7 +237,7 @@ const TeamsManagementModal = ({ isOpen, onClose }: TeamsManagementModalProps) =>
                             </div>
                           )}
                           <div className="text-sm text-muted-foreground">
-                            Help tokens used: {team.help_tokens_used}
+                            Help tokens used: {team.help_tokens_used || 0}
                           </div>
                         </div>
                       </div>
@@ -245,9 +245,9 @@ const TeamsManagementModal = ({ isOpen, onClose }: TeamsManagementModalProps) =>
                       <div className="flex items-center gap-2">
                         <span className="text-sm font-medium">Status:</span>
                         <Select
-                          value={team.status}
-                          onValueChange={(value: Team['status']) => 
-                            updateTeamStatus(team.id, value)
+                          value={team.status || 'pending'}
+                          onValueChange={(value: string) => 
+                            updateTeamStatus(team.id, value as Team['status'])
                           }
                         >
                           <SelectTrigger className="w-40">
