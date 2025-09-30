@@ -3,18 +3,20 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { 
-  Shield, 
-  Users, 
-  MapPin, 
-  Trophy, 
-  Settings, 
+import {
+  Shield,
+  Users,
+  MapPin,
+  Trophy,
+  Settings,
   LogOut,
   Plus,
-  Activity
+  Activity,
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/contexts/AuthContext';
+import { getAdminProfile } from '@/services/admin/admin-service';
 
 interface DashboardStats {
   totalTeams: number;
@@ -24,72 +26,114 @@ interface DashboardStats {
 }
 
 const AdminDashboard = () => {
+  const { user, loading: authLoading, signOut } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
     totalTeams: 0,
     activeTeams: 0,
     completedTeams: 0,
-    totalCheckpoints: 0
+    totalCheckpoints: 0,
   });
-  const [loading, setLoading] = useState(true);
+  const [authorizing, setAuthorizing] = useState(true);
+  const [authorized, setAuthorized] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
   useEffect(() => {
-    fetchDashboardStats();
-  }, []);
+    if (authLoading) return;
 
-  const fetchDashboardStats = async () => {
-    try {
-      // Fetch team statistics
-      const { data: teams, error: teamsError } = await supabase
-        .from('teams')
-        .select('status');
-
-      if (teamsError) {
-        throw teamsError;
+    const verifyAdmin = async () => {
+      if (!user?.email) {
+        toast({
+          variant: 'destructive',
+          title: 'Admin access required',
+          description: 'Please sign in with an admin account.',
+        });
+        navigate('/admin');
+        setAuthorizing(false);
+        return;
       }
 
-      // Fetch checkpoint count
-      const { data: checkpoints, error: checkpointsError } = await supabase
-        .from('checkpoints')
-        .select('id', { count: 'exact' });
+      try {
+        const adminProfile = await getAdminProfile(user.email);
+        if (!adminProfile || adminProfile.is_active === false) {
+          toast({
+            variant: 'destructive',
+            title: 'Access denied',
+            description: 'Your account does not have admin privileges.',
+          });
+          await signOut();
+          navigate('/admin');
+          return;
+        }
 
-      if (checkpointsError) {
-        throw checkpointsError;
+        setAuthorized(true);
+      } catch (error) {
+        console.error('Error verifying admin access:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Unable to verify admin access',
+          description: 'Please try signing in again.',
+        });
+        await signOut();
+        navigate('/admin');
+        return;
+      } finally {
+        setAuthorizing(false);
       }
+    };
 
-      const totalTeams = teams?.length || 0;
-      const activeTeams = teams?.filter(t => t.status === 'active').length || 0;
-      const completedTeams = teams?.filter(t => t.status === 'completed').length || 0;
-      const totalCheckpoints = checkpoints?.length || 0;
+    verifyAdmin();
+  }, [authLoading, user?.email, navigate, toast, signOut]);
 
-      setStats({
-        totalTeams,
-        activeTeams,
-        completedTeams,
-        totalCheckpoints
-      });
-    } catch (error) {
-      console.error('Error fetching dashboard stats:', error);
-      toast({
-        variant: "destructive",
-        title: "Error loading dashboard",
-        description: "Failed to load dashboard statistics.",
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
+  useEffect(() => {
+    if (!authorized) return;
+    const loadStats = async () => {
+      setStatsLoading(true);
+      try {
+        const { data: teams, error: teamsError } = await supabase
+          .from('teams')
+          .select('status');
 
-  const handleLogout = () => {
+        if (teamsError) throw teamsError;
+
+        const { count: checkpointCount, error: checkpointsError } = await supabase
+          .from('checkpoints')
+          .select('id', { count: 'exact', head: true });
+
+        if (checkpointsError) throw checkpointsError;
+
+        const totalTeams = teams?.length ?? 0;
+        const activeTeams = teams?.filter(t => t.status === 'active').length ?? 0;
+        const completedTeams = teams?.filter(t => t.status === 'completed').length ?? 0;
+        const totalCheckpoints = checkpointCount ?? 0;
+
+        setStats({ totalTeams, activeTeams, completedTeams, totalCheckpoints });
+      } catch (error) {
+        console.error('Error fetching dashboard stats:', error);
+        toast({
+          variant: 'destructive',
+          title: 'Error loading dashboard',
+          description: 'Failed to load dashboard statistics.',
+        });
+      } finally {
+        setStatsLoading(false);
+      }
+    };
+
+    loadStats();
+  }, [authorized, toast]);
+
+  const handleLogout = async () => {
+    await signOut();
     toast({
-      title: "Logged out",
-      description: "You have been logged out of the admin panel.",
+      title: 'Logged out',
+      description: 'You have been logged out of the admin panel.',
     });
     navigate('/admin');
   };
 
-  if (loading) {
+  if (authorizing || statsLoading) {
     return (
       <div className="min-h-screen bg-gradient-hero flex items-center justify-center">
         <div className="text-center space-y-4">
@@ -100,27 +144,25 @@ const AdminDashboard = () => {
     );
   }
 
+  if (!authorized) {
+    return null;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-hero">
-      {/* Navigation */}
       <nav className="flex justify-between items-center p-6 border-b border-border">
         <div className="flex items-center space-x-2">
           <Shield className="h-8 w-8 text-destructive" />
           <h1 className="text-2xl font-bold text-foreground">Admin Panel</h1>
           <Badge variant="destructive" className="ml-2">RESTRICTED</Badge>
         </div>
-        <Button 
-          variant="outline" 
-          onClick={handleLogout}
-          className="glass-card"
-        >
+        <Button variant="outline" onClick={handleLogout} className="glass-card">
           <LogOut className="h-4 w-4 mr-2" />
           Logout
         </Button>
       </nav>
 
       <div className="container mx-auto px-6 py-8">
-        {/* Dashboard Overview */}
         <div className="mb-8">
           <h2 className="text-3xl font-bold text-foreground mb-2">Dashboard Overview</h2>
           <p className="text-muted-foreground">
@@ -128,7 +170,6 @@ const AdminDashboard = () => {
           </p>
         </div>
 
-        {/* Statistics Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
           <Card className="glass-card border-glass-border">
             <CardHeader className="pb-2">
@@ -179,7 +220,6 @@ const AdminDashboard = () => {
           </Card>
         </div>
 
-        {/* Management Cards */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           <Card className="glass-card border-glass-border hover:glow-primary transition-glow cursor-pointer">
             <CardHeader>
@@ -288,7 +328,6 @@ const AdminDashboard = () => {
           </Card>
         </div>
 
-        {/* Warning Banner */}
         <div className="mt-8">
           <Card className="glass-card border-destructive/20 bg-destructive/5">
             <CardContent className="p-4">
