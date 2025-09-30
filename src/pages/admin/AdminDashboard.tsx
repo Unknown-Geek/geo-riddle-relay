@@ -191,7 +191,7 @@ const AdminDashboard = () => {
           completed_at: null,
           help_tokens_used: 0
         })
-        .neq('id', '');
+        .gt('created_at', '1900-01-01');
 
       if (error) throw error;
 
@@ -199,7 +199,7 @@ const AdminDashboard = () => {
       const { error: submissionsError } = await supabase
         .from('submissions')
         .delete()
-        .neq('id', '');
+        .gt('created_at', '1900-01-01');
 
       if (submissionsError) throw submissionsError;
 
