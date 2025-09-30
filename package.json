@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "vite build && npm run seed:admin",
     "build:dev": "vite build --mode development",
+    "build:only": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
     "seed:admin": "node scripts/seed-admin.mjs"

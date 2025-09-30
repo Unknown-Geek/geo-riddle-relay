@@ -15,6 +15,9 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import TeamsManagementModal from '@/components/admin/TeamsManagementModal';
+import LeaderboardModal from '@/components/admin/LeaderboardModal';
+import GameSettingsModal from '@/components/admin/GameSettingsModal';
 
 interface DashboardStats {
   totalTeams: number;
@@ -33,6 +36,13 @@ const AdminDashboard = () => {
   const [authorizing, setAuthorizing] = useState(true);
   const [authorized, setAuthorized] = useState(false);
   const [statsLoading, setStatsLoading] = useState(false);
+  
+  // Modal states
+  const [teamsModalOpen, setTeamsModalOpen] = useState(false);
+  const [checkpointsModalOpen, setCheckpointsModalOpen] = useState(false);
+  const [leaderboardModalOpen, setLeaderboardModalOpen] = useState(false);
+  const [activityLogsModalOpen, setActivityLogsModalOpen] = useState(false);
+  const [gameSettingsModalOpen, setGameSettingsModalOpen] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -104,6 +114,138 @@ const AdminDashboard = () => {
       description: 'You have been logged out of the admin panel.',
     });
     navigate('/admin');
+  };
+
+  const handleStartGame = async () => {
+    try {
+      const { error } = await supabase
+        .from('game_settings')
+        .update({ setting_value: 'true' })
+        .eq('setting_key', 'game_active');
+
+      if (error) throw error;
+
+      toast({
+        title: 'Game Started',
+        description: 'The treasure hunt is now active!',
+      });
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Failed to start game',
+        description: error.message,
+      });
+    }
+  };
+
+  const handleExportResults = async () => {
+    try {
+      const { data: teams, error } = await supabase
+        .from('teams')
+        .select('name, leader_email, current_score, status, completed_at')
+        .order('current_score', { ascending: false });
+
+      if (error) throw error;
+
+      const csvContent = [
+        'Team Name,Leader Email,Score,Status,Completed At',
+        ...teams.map(team => 
+          `"${team.name}","${team.leader_email}",${team.current_score || 0},"${team.status || 'pending'}","${team.completed_at || 'Not completed'}"`
+        )
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `treasure-hunt-results-${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: 'Results Exported',
+        description: 'Team results have been downloaded as CSV.',
+      });
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Export failed',
+        description: error.message,
+      });
+    }
+  };
+
+  const handleResetScores = async () => {
+    if (!confirm('Are you sure you want to reset all team scores? This action cannot be undone.')) {
+      return;
+    }
+
+    try {
+      const { error } = await supabase
+        .from('teams')
+        .update({ 
+          current_score: 0,
+          status: 'pending',
+          completed_at: null,
+          help_tokens_used: 0
+        })
+        .neq('id', '');
+
+      if (error) throw error;
+
+      // Also clear submissions
+      const { error: submissionsError } = await supabase
+        .from('submissions')
+        .delete()
+        .neq('id', '');
+
+      if (submissionsError) throw submissionsError;
+
+      toast({
+        title: 'Scores Reset',
+        description: 'All team scores and submissions have been reset.',
+      });
+      
+      // Reload stats
+      if (authorized) {
+        const loadStats = async () => {
+          setStatsLoading(true);
+          try {
+            const { data: teams, error: teamsError } = await supabase
+              .from('teams')
+              .select('status');
+    
+            if (teamsError) throw teamsError;
+    
+            const { count: checkpointCount, error: checkpointsError } = await supabase
+              .from('checkpoints')
+              .select('id', { count: 'exact', head: true });
+    
+            if (checkpointsError) throw checkpointsError;
+    
+            const totalTeams = teams?.length ?? 0;
+            const activeTeams = teams?.filter(t => t.status === 'active').length ?? 0;
+            const completedTeams = teams?.filter(t => t.status === 'completed').length ?? 0;
+            const totalCheckpoints = checkpointCount ?? 0;
+    
+            setStats({ totalTeams, activeTeams, completedTeams, totalCheckpoints });
+          } catch (error) {
+            console.error('Error fetching dashboard stats:', error);
+          } finally {
+            setStatsLoading(false);
+          }
+        };
+        loadStats();
+      }
+    } catch (error: any) {
+      toast({
+        variant: 'destructive',
+        title: 'Reset failed',
+        description: error.message,
+      });
+    }
   };
 
   if (authorizing || statsLoading) {
@@ -205,7 +347,7 @@ const AdminDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full" variant="outline">
+              <Button className="w-full" variant="outline" onClick={() => setTeamsModalOpen(true)}>
                 Manage Teams
               </Button>
             </CardContent>
@@ -222,7 +364,7 @@ const AdminDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full" variant="outline">
+              <Button className="w-full" variant="outline" onClick={() => setCheckpointsModalOpen(true)}>
                 <Plus className="h-4 w-4 mr-2" />
                 Add Checkpoint
               </Button>
@@ -240,7 +382,7 @@ const AdminDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full" variant="outline">
+              <Button className="w-full" variant="outline" onClick={() => setLeaderboardModalOpen(true)}>
                 View Leaderboard
               </Button>
             </CardContent>
@@ -257,7 +399,7 @@ const AdminDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full" variant="outline">
+              <Button className="w-full" variant="outline" onClick={() => setActivityLogsModalOpen(true)}>
                 View Logs
               </Button>
             </CardContent>
@@ -274,7 +416,7 @@ const AdminDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <Button className="w-full" variant="outline">
+              <Button className="w-full" variant="outline" onClick={() => setGameSettingsModalOpen(true)}>
                 Settings
               </Button>
             </CardContent>
@@ -288,13 +430,13 @@ const AdminDashboard = () => {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-2">
-              <Button size="sm" variant="secondary" className="w-full">
+              <Button size="sm" variant="secondary" className="w-full" onClick={handleStartGame}>
                 Start Game
               </Button>
-              <Button size="sm" variant="secondary" className="w-full">
+              <Button size="sm" variant="secondary" className="w-full" onClick={handleExportResults}>
                 Export Results
               </Button>
-              <Button size="sm" variant="secondary" className="w-full">
+              <Button size="sm" variant="secondary" className="w-full" onClick={handleResetScores}>
                 Reset Scores
               </Button>
             </CardContent>
@@ -314,6 +456,20 @@ const AdminDashboard = () => {
           </Card>
         </div>
       </div>
+
+      {/* Modals */}
+      <TeamsManagementModal
+        isOpen={teamsModalOpen}
+        onClose={() => setTeamsModalOpen(false)}
+      />
+      <LeaderboardModal
+        isOpen={leaderboardModalOpen}
+        onClose={() => setLeaderboardModalOpen(false)}
+      />
+      <GameSettingsModal
+        isOpen={gameSettingsModalOpen}
+        onClose={() => setGameSettingsModalOpen(false)}
+      />
     </div>
   );
 };
