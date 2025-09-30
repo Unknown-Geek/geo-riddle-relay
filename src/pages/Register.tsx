@@ -1,0 +1,248 @@
+import { useState } from 'react';
+import { Link, useNavigate } from 'react-router-dom';
+import { useAuth } from '@/contexts/AuthContext';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Compass, ArrowLeft, Users } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
+
+const Register = () => {
+  const [formData, setFormData] = useState({
+    teamName: '',
+    leaderEmail: '',
+    password: '',
+    confirmPassword: '',
+    memberNames: ['', '', '', '']
+  });
+  const [loading, setLoading] = useState(false);
+  const { signUp } = useAuth();
+  const navigate = useNavigate();
+  const { toast } = useToast();
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  const handleMemberChange = (index: number, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      memberNames: prev.memberNames.map((name, i) => i === index ? value : name)
+    }));
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (formData.password !== formData.confirmPassword) {
+      toast({
+        variant: "destructive",
+        title: "Password mismatch",
+        description: "Please make sure your passwords match.",
+      });
+      return;
+    }
+
+    const filledMembers = formData.memberNames.filter(name => name.trim() !== '');
+    if (filledMembers.length === 0) {
+      toast({
+        variant: "destructive",
+        title: "Team members required",
+        description: "Please add at least one team member.",
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // First create the user account
+      const { error: authError } = await signUp(formData.leaderEmail, formData.password);
+      
+      if (authError) {
+        setLoading(false);
+        return;
+      }
+
+      // Create team record
+      const { error: teamError } = await supabase
+        .from('teams')
+        .insert({
+          name: formData.teamName,
+          leader_email: formData.leaderEmail,
+          member_names: filledMembers,
+          status: 'pending'
+        });
+
+      if (teamError) {
+        toast({
+          variant: "destructive",
+          title: "Team registration failed",
+          description: teamError.message,
+        });
+        setLoading(false);
+        return;
+      }
+
+      toast({
+        title: "Registration successful!",
+        description: "Your team has been registered. Please check your email to confirm your account.",
+      });
+
+      navigate('/');
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Registration failed",
+        description: "An unexpected error occurred. Please try again.",
+      });
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="min-h-screen bg-gradient-hero">
+      {/* Navigation */}
+      <nav className="flex justify-between items-center p-6">
+        <Link to="/" className="flex items-center space-x-2">
+          <ArrowLeft className="h-5 w-5 text-primary" />
+          <Compass className="h-8 w-8 text-primary" />
+          <h1 className="text-2xl font-bold text-foreground">Campus Treasure Hunt</h1>
+        </Link>
+      </nav>
+
+      <div className="container mx-auto px-6 py-8">
+        <div className="max-w-2xl mx-auto">
+          <Card className="glass-card border-glass-border">
+            <CardHeader className="text-center">
+              <CardTitle className="text-3xl text-foreground flex items-center justify-center gap-2">
+                <Users className="h-8 w-8 text-primary" />
+                Register Your Team
+              </CardTitle>
+              <CardDescription className="text-muted-foreground">
+                Create your team account to join the treasure hunt
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Team Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-foreground">Team Information</h3>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="teamName" className="text-foreground">Team Name</Label>
+                    <Input
+                      id="teamName"
+                      type="text"
+                      placeholder="Enter your team name"
+                      value={formData.teamName}
+                      onChange={(e) => handleInputChange('teamName', e.target.value)}
+                      required
+                      className="bg-input border-border"
+                    />
+                  </div>
+                </div>
+
+                {/* Leader Information */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-foreground">Team Leader (You)</h3>
+                  
+                  <div className="space-y-2">
+                    <Label htmlFor="leaderEmail" className="text-foreground">Email Address</Label>
+                    <Input
+                      id="leaderEmail"
+                      type="email"
+                      placeholder="your.email@college.edu"
+                      value={formData.leaderEmail}
+                      onChange={(e) => handleInputChange('leaderEmail', e.target.value)}
+                      required
+                      className="bg-input border-border"
+                    />
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="password" className="text-foreground">Password</Label>
+                      <Input
+                        id="password"
+                        type="password"
+                        placeholder="Create a password"
+                        value={formData.password}
+                        onChange={(e) => handleInputChange('password', e.target.value)}
+                        required
+                        className="bg-input border-border"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="confirmPassword" className="text-foreground">Confirm Password</Label>
+                      <Input
+                        id="confirmPassword"
+                        type="password"
+                        placeholder="Confirm your password"
+                        value={formData.confirmPassword}
+                        onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
+                        required
+                        className="bg-input border-border"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Team Members */}
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-foreground">Team Members (up to 4 total)</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Enter the names of your team members. You can add up to 4 members including yourself.
+                  </p>
+                  
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {formData.memberNames.map((name, index) => (
+                      <div key={index} className="space-y-2">
+                        <Label htmlFor={`member${index}`} className="text-foreground">
+                          Member {index + 1}
+                        </Label>
+                        <Input
+                          id={`member${index}`}
+                          type="text"
+                          placeholder="Team member name"
+                          value={name}
+                          onChange={(e) => handleMemberChange(index, e.target.value)}
+                          className="bg-input border-border"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                <Button 
+                  type="submit" 
+                  className="w-full bg-gradient-primary hover:glow-primary transition-glow"
+                  disabled={loading}
+                  size="lg"
+                >
+                  {loading ? 'Registering Team...' : 'Register Team'}
+                </Button>
+              </form>
+              
+              <div className="mt-6 text-center">
+                <p className="text-sm text-muted-foreground">
+                  Already have an account?{' '}
+                  <Link to="/" className="text-primary hover:underline font-medium">
+                    Sign in here
+                  </Link>
+                </p>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+export default Register;
