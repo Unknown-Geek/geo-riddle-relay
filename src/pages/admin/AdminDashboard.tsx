@@ -15,8 +15,6 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/contexts/AuthContext';
-import { isAdminEmail } from '@/lib/utils';
 
 interface DashboardStats {
   totalTeams: number;
@@ -26,7 +24,6 @@ interface DashboardStats {
 }
 
 const AdminDashboard = () => {
-  const { user, loading: authLoading, signOut } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
     totalTeams: 0,
     activeTeams: 0,
@@ -40,38 +37,28 @@ const AdminDashboard = () => {
   const { toast } = useToast();
 
   useEffect(() => {
-    if (authLoading) return;
+    const enforceAdminGuard = () => {
+      const hardcodedEmail = import.meta.env.VITE_ADMIN_EMAIL;
+      const hardcodedPassword = import.meta.env.VITE_ADMIN_PASSWORD;
 
-    const enforceAdminGuard = async () => {
-      if (!user?.email) {
+      if (!hardcodedEmail || !hardcodedPassword) {
         toast({
           variant: 'destructive',
-          title: 'Admin access required',
-          description: 'Please sign in with an admin account.',
+          title: 'Admin access not configured',
+          description: 'Admin credentials are not properly configured.',
         });
         navigate('/admin');
         setAuthorizing(false);
         return;
       }
 
-      if (!isAdminEmail(user.email)) {
-        toast({
-          variant: 'destructive',
-          title: 'Access denied',
-          description: 'This account is not authorized for admin access.',
-        });
-        await signOut();
-        navigate('/admin');
-        setAuthorizing(false);
-        return;
-      }
-
+      // Always allow access if hardcoded credentials are configured
       setAuthorized(true);
       setAuthorizing(false);
     };
 
     enforceAdminGuard();
-  }, [authLoading, user?.email, navigate, toast, signOut]);
+  }, [navigate, toast]);
 
   useEffect(() => {
     if (!authorized) return;
@@ -111,8 +98,7 @@ const AdminDashboard = () => {
     loadStats();
   }, [authorized, toast]);
 
-  const handleLogout = async () => {
-    await signOut();
+  const handleLogout = () => {
     toast({
       title: 'Logged out',
       description: 'You have been logged out of the admin panel.',
