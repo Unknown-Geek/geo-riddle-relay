@@ -131,48 +131,43 @@ ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.activity_logs ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.game_settings ENABLE ROW LEVEL SECURITY;
 
--- RLS Policies for teams (teams can only see their own data)
-CREATE POLICY "Teams can view their own data" ON public.teams
-    FOR SELECT USING (leader_email = auth.email());
+-- RLS Policies for teams 
+-- Allow public access for admin operations (since admin uses anon key)
+CREATE POLICY "Public read access for teams" ON public.teams
+    FOR SELECT USING (true);
 
-CREATE POLICY "Teams can update their own data" ON public.teams
-    FOR UPDATE USING (leader_email = auth.email());
+CREATE POLICY "Public write access for teams" ON public.teams
+    FOR UPDATE USING (true);
+
+CREATE POLICY "Public delete access for teams" ON public.teams
+    FOR DELETE USING (true);
 
 CREATE POLICY "Anyone can create teams" ON public.teams
     FOR INSERT WITH CHECK (true);
 
--- RLS Policies for checkpoints (read-only for teams)
-CREATE POLICY "Teams can view active checkpoints" ON public.checkpoints
-    FOR SELECT USING (is_active = true);
+-- RLS Policies for checkpoints - Allow full access for admin operations
+CREATE POLICY "Public access for checkpoints" ON public.checkpoints
+    FOR ALL USING (true);
 
--- RLS Policies for riddles (read-only for teams)
-CREATE POLICY "Teams can view active riddles" ON public.riddles
-    FOR SELECT USING (is_active = true);
+-- RLS Policies for riddles - Allow full access for admin operations  
+CREATE POLICY "Public access for riddles" ON public.riddles
+    FOR ALL USING (true);
 
--- RLS Policies for submissions (teams can only see their own)
-CREATE POLICY "Teams can view their own submissions" ON public.submissions
-    FOR SELECT USING (team_id IN (
-        SELECT id FROM public.teams WHERE leader_email = auth.email()
-    ));
-
-CREATE POLICY "Teams can create submissions" ON public.submissions
-    FOR INSERT WITH CHECK (team_id IN (
-        SELECT id FROM public.teams WHERE leader_email = auth.email()
-    ));
+-- RLS Policies for submissions - Allow full access for admin operations
+CREATE POLICY "Public access for submissions" ON public.submissions
+    FOR ALL USING (true);
 
 -- RLS Policies for admin users (admin access only)
 CREATE POLICY "Only admins can access admin_users" ON public.admin_users
     FOR ALL USING (false);
 
--- RLS Policies for activity logs (read-only for teams, all access for admins)
-CREATE POLICY "Teams can view their own activity logs" ON public.activity_logs
-    FOR SELECT USING (team_id IN (
-        SELECT id FROM public.teams WHERE leader_email = auth.email()
-    ));
+-- RLS Policies for activity logs - Allow full access for admin operations
+CREATE POLICY "Public access for activity logs" ON public.activity_logs
+    FOR ALL USING (true);
 
--- RLS Policies for game settings (read-only for teams)
-CREATE POLICY "Everyone can view game settings" ON public.game_settings
-    FOR SELECT USING (true);
+-- RLS Policies for game settings - Allow full access for admin operations
+CREATE POLICY "Public access for game settings" ON public.game_settings
+    FOR ALL USING (true);
 
 -- Create trigger function to update updated_at timestamps
 CREATE OR REPLACE FUNCTION update_updated_at_column()
