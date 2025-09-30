@@ -13,6 +13,7 @@ CREATE TABLE public.teams (
     id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
     name VARCHAR(100) NOT NULL UNIQUE,
     leader_email VARCHAR(255) NOT NULL UNIQUE,
+    password_hash TEXT NOT NULL,
     member_names TEXT[] NOT NULL CHECK (array_length(member_names, 1) <= 4),
     status team_status DEFAULT 'pending',
     current_score INTEGER DEFAULT 0,
