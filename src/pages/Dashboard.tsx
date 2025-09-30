@@ -1,264 +1,341 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Compass, Trophy, MapPin, Users, LogOut, HelpCircle } from 'lucide-react';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { Compass, Trophy, LogOut, AlertTriangle, ShieldAlert, Satellite } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { useGeolocation } from "@/hooks/use-geolocation";
+import {
+  getTeamByLeaderEmail,
+  getCheckpointWithRiddles,
+  getFirstActiveCheckpoint,
+  getTeamSubmissions,
+  submitRiddleAnswer,
+  redeemHelpToken,
+  subscribeToTeamUpdates,
+  type TeamRow,
+} from "@/services/player-service";
+import { TeamSummary } from "@/components/dashboard/TeamSummary";
+import { CheckpointMap } from "@/components/dashboard/CheckpointMap";
+import { RiddleList } from "@/components/dashboard/RiddleList";
+import { SubmissionTimeline } from "@/components/dashboard/SubmissionTimeline";
+import { Skeleton } from "@/components/ui/skeleton";
 
-interface Team {
-  id: string;
-  name: string;
-  current_score: number;
-  status: string;
-  member_names: string[];
-  help_tokens_used: number;
-}
+const HELP_TOKENS_ALLOWED = 3;
 
 const Dashboard = () => {
-  const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const { user, loading, signOut } = useAuth();
   const { toast } = useToast();
-  const [team, setTeam] = useState<Team | null>(null);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const {
+    reading,
+    suspicious,
+    permission,
+    error: geolocationError,
+    distanceTo,
+    requestPermission,
+  } = useGeolocation();
 
   useEffect(() => {
-    if (!user) {
-      navigate('/');
-      return;
+    if (!loading && !user) {
+      navigate("/");
     }
+  }, [loading, navigate, user]);
 
-    fetchTeamData();
-  }, [user, navigate]);
+  const teamQuery = useQuery({
+    queryKey: ["team", user?.email],
+    queryFn: async () => {
+      if (!user?.email) return null;
+      return getTeamByLeaderEmail(user.email);
+    },
+    enabled: !!user?.email,
+    refetchOnWindowFocus: false,
+  });
 
-  const fetchTeamData = async () => {
-    if (!user?.email) return;
+  const team = teamQuery.data ?? null;
 
-    try {
-      const { data, error } = await supabase
-        .from('teams')
-        .select('*')
-        .eq('leader_email', user.email)
-        .single();
+  useEffect(() => {
+    if (!team?.id) return;
+    const unsubscribe = subscribeToTeamUpdates(team.id, () => {
+      queryClient.invalidateQueries({ queryKey: ["team", user?.email] });
+      queryClient.invalidateQueries({ queryKey: ["submissions", team.id] });
+    });
+    return unsubscribe;
+  }, [queryClient, team?.id, user?.email]);
 
-      if (error) {
-        toast({
-          variant: "destructive",
-          title: "Error loading team data",
-          description: error.message,
-        });
-      } else {
-        setTeam(data);
+  const checkpointQuery = useQuery({
+    queryKey: ["checkpoint", team?.current_checkpoint_id, team?.status],
+    queryFn: async () => {
+      if (!team) return null;
+      if (team.current_checkpoint_id) {
+        return getCheckpointWithRiddles(team.current_checkpoint_id);
       }
-    } catch (error) {
-      console.error('Error fetching team:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
+      const fallback = await getFirstActiveCheckpoint();
+      if (!fallback) return null;
+      return getCheckpointWithRiddles(fallback.id);
+    },
+    enabled: !!team && team.status !== "completed",
+  });
+
+  const submissionsQuery = useQuery({
+    queryKey: ["submissions", team?.id],
+    queryFn: async () => {
+      if (!team?.id) return [];
+      return getTeamSubmissions(team.id);
+    },
+    enabled: !!team?.id,
+    staleTime: 5_000,
+  });
+
+  const checkpoint = checkpointQuery.data;
+  const submissions = submissionsQuery.data ?? [];
+  const helpTokensRemaining = Math.max(0, HELP_TOKENS_ALLOWED - (team?.help_tokens_used ?? 0));
+
+  const distanceToCheckpoint = checkpoint
+    ? distanceTo({ latitude: checkpoint.latitude, longitude: checkpoint.longitude })
+    : null;
+  const checkpointRadius = checkpoint?.radius_meters ?? 50;
+  const checkpointUnlocked = distanceToCheckpoint !== null && distanceToCheckpoint <= checkpointRadius + 5;
+
+  const [activeSubmissionId, setActiveSubmissionId] = useState<string | null>(null);
+  const [activeHelpId, setActiveHelpId] = useState<string | null>(null);
+
+  const submitMutation = useMutation({
+    mutationFn: (payload: Parameters<typeof submitRiddleAnswer>[0]) => submitRiddleAnswer(payload),
+    onMutate: (variables) => {
+      setActiveSubmissionId(variables.riddleId);
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Answer submitted",
+        description: data?.message ?? "We recorded your attempt.",
+      });
+      queryClient.invalidateQueries({ queryKey: ["submissions", team?.id] });
+      queryClient.invalidateQueries({ queryKey: ["team", user?.email] });
+    },
+    onError: (err: any) => {
+      toast({
+        variant: "destructive",
+        title: "Submission failed",
+        description: err?.message ?? "Please try again in a moment.",
+      });
+    },
+    onSettled: () => {
+      setActiveSubmissionId(null);
+    },
+  });
+
+  const helpMutation = useMutation({
+    mutationFn: (payload: Parameters<typeof redeemHelpToken>[0]) => redeemHelpToken(payload),
+    onMutate: (variables) => {
+      setActiveHelpId(variables.riddleId);
+    },
+    onSuccess: (data: any) => {
+      toast({
+        title: "Help token redeemed",
+        description: data?.hint ?? "Hint granted. Check your notifications!",
+      });
+      queryClient.invalidateQueries({ queryKey: ["team", user?.email] });
+    },
+    onError: (err: any) => {
+      toast({
+        variant: "destructive",
+        title: "Unable to redeem token",
+        description: err?.message ?? "Try again or contact an admin.",
+      });
+    },
+    onSettled: () => {
+      setActiveHelpId(null);
+    },
+  });
 
   const handleSignOut = async () => {
     await signOut();
-    navigate('/');
+    navigate("/");
   };
+
+  const renderLoading = () => (
+    <div className="min-h-screen bg-gradient-hero flex items-center justify-center">
+      <div className="text-center space-y-4">
+        <Compass className="h-12 w-12 text-primary mx-auto animate-spin" />
+        <p className="text-foreground">Preparing your treasure hunt dashboard...</p>
+      </div>
+    </div>
+  );
+
+  if (loading || teamQuery.isLoading) {
+    return renderLoading();
+  }
 
   if (!user) {
-    return null;
+    return renderLoading();
   }
-
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-gradient-hero flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <Compass className="h-12 w-12 text-primary mx-auto animate-spin" />
-          <p className="text-foreground">Loading your team data...</p>
-        </div>
-      </div>
-    );
-  }
-
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case 'active': return 'default';
-      case 'completed': return 'secondary';
-      case 'pending': return 'outline';
-      case 'disqualified': return 'destructive';
-      default: return 'outline';
-    }
-  };
 
   return (
     <div className="min-h-screen bg-gradient-hero">
-      {/* Navigation */}
       <nav className="flex justify-between items-center p-6 border-b border-border">
         <div className="flex items-center space-x-2">
           <Compass className="h-8 w-8 text-primary" />
           <h1 className="text-2xl font-bold text-foreground">Campus Treasure Hunt</h1>
         </div>
         <div className="flex items-center space-x-4">
-          <Button 
-            variant="outline" 
-            onClick={() => navigate('/leaderboard')}
-            className="glass-card"
-          >
-            <Trophy className="h-4 w-4 mr-2" />
-            Leaderboard
+          <Button variant="outline" onClick={() => navigate("/leaderboard")} className="glass-card">
+            <Trophy className="h-4 w-4 mr-2" /> Leaderboard
           </Button>
-          <Button 
-            variant="outline" 
-            onClick={handleSignOut}
-            className="glass-card"
-          >
-            <LogOut className="h-4 w-4 mr-2" />
-            Sign Out
+          <Button variant="outline" onClick={handleSignOut} className="glass-card">
+            <LogOut className="h-4 w-4 mr-2" /> Sign Out
           </Button>
         </div>
       </nav>
 
-      <div className="container mx-auto px-6 py-8">
-        {team ? (
-          <div className="space-y-8">
-            {/* Team Overview */}
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <Card className="glass-card border-glass-border">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-foreground">
-                    <Users className="h-5 w-5 text-primary" />
-                    Team Info
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div>
-                    <h3 className="text-lg font-semibold text-foreground">{team.name}</h3>
-                    <Badge variant={getStatusBadgeVariant(team.status)} className="mt-1">
-                      {team.status.charAt(0).toUpperCase() + team.status.slice(1)}
-                    </Badge>
-                  </div>
-                  <div>
-                    <p className="text-sm text-muted-foreground">Team Members:</p>
-                    <ul className="text-sm text-foreground">
-                      {team.member_names.map((member, index) => (
-                        <li key={index}>• {member}</li>
-                      ))}
-                    </ul>
-                  </div>
-                </CardContent>
-              </Card>
+      <div className="container mx-auto px-6 py-8 space-y-6">
+        {permission !== "granted" && (
+          <Alert variant="destructive" className="glass-card border-destructive/40">
+            <ShieldAlert className="h-4 w-4" />
+            <AlertTitle>Enable location services</AlertTitle>
+            <AlertDescription>
+              We need precise GPS access to unlock riddles. {" "}
+              <button className="underline text-destructive-foreground" onClick={requestPermission}>
+                Tap to request permission again.
+              </button>
+            </AlertDescription>
+          </Alert>
+        )}
 
-              <Card className="glass-card border-glass-border">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-foreground">
-                    <Trophy className="h-5 w-5 text-warning" />
-                    Score
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-foreground">{team.current_score}</div>
-                  <p className="text-sm text-muted-foreground">Total Points</p>
-                </CardContent>
-              </Card>
+        {geolocationError && (
+          <Alert variant="destructive" className="glass-card border-destructive/40">
+            <AlertTriangle className="h-4 w-4" />
+            <AlertTitle>Location issue</AlertTitle>
+            <AlertDescription>{geolocationError}</AlertDescription>
+          </Alert>
+        )}
 
-              <Card className="glass-card border-glass-border">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-foreground">
-                    <HelpCircle className="h-5 w-5 text-accent" />
-                    Help Tokens
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-3xl font-bold text-foreground">
-                    {3 - team.help_tokens_used}
-                  </div>
-                  <p className="text-sm text-muted-foreground">Remaining</p>
-                </CardContent>
-              </Card>
+        {suspicious && (
+          <Alert className="glass-card border-warning/40 bg-warning/10">
+            <Satellite className="h-4 w-4 text-warning" />
+            <AlertTitle>Location anomaly detected</AlertTitle>
+            <AlertDescription>
+              Slow down—your signal looks unstable. We may lock submissions if spoofing continues.
+            </AlertDescription>
+          </Alert>
+        )}
+
+        {!team && (
+          <Card className="glass-card border-glass-border max-w-xl mx-auto p-8 text-center space-y-4">
+            <h2 className="text-2xl font-bold text-foreground">No team found</h2>
+            <p className="text-muted-foreground">
+              You need to register a team before joining the treasure hunt.
+            </p>
+            <Button className="bg-gradient-primary hover:glow-primary" onClick={() => navigate("/register")}>Register your team</Button>
+          </Card>
+        )}
+
+        {team && (
+          <div className="grid gap-6 lg:grid-cols-[1.5fr_1fr]">
+            <div className="space-y-6">
+              <div className="grid gap-6 md:grid-cols-2">
+                <TeamSummary team={team as TeamRow} helpTokensRemaining={helpTokensRemaining} />
+                <CheckpointMap
+                  checkpoint={checkpoint}
+                  reading={reading}
+                  suspicious={suspicious}
+                  distanceToCheckpoint={distanceToCheckpoint}
+                />
+              </div>
+
+              <div>
+                {checkpointQuery.isLoading ? (
+                  <Card className="glass-card border-glass-border p-8">
+                    <Skeleton className="h-8 w-1/3 mb-4" />
+                    <Skeleton className="h-24 w-full" />
+                    <Skeleton className="h-24 w-full mt-4" />
+                  </Card>
+                ) : (
+                  <RiddleList
+                    riddles={checkpoint?.riddles ?? []}
+                    submissions={submissions}
+                    unlocked={checkpointUnlocked}
+                    helpTokensRemaining={helpTokensRemaining}
+                    loadingRiddleId={activeSubmissionId}
+                    helpLoadingId={activeHelpId}
+                    onSubmit={async (riddleId, answer) => {
+                      if (!team || !checkpoint) return;
+                      if (!checkpointUnlocked) {
+                        toast({
+                          variant: "destructive",
+                          title: "Checkpoint still locked",
+                          description: "Move closer to the landmark to submit your answer.",
+                        });
+                        return;
+                      }
+                      if (!answer.trim()) {
+                        toast({
+                          variant: "destructive",
+                          title: "Enter an answer",
+                          description: "Your team must provide an answer before submitting.",
+                        });
+                        return;
+                      }
+                      await submitMutation.mutateAsync({
+                        teamId: team.id,
+                        riddleId,
+                        checkpointId: checkpoint.id,
+                        answer,
+                        latitude: reading?.latitude,
+                        longitude: reading?.longitude,
+                      });
+                    }}
+                    onRedeemHelpToken={async (riddleId) => {
+                      if (!team || !checkpoint) return;
+                      if (helpTokensRemaining <= 0) {
+                        toast({
+                          variant: "destructive",
+                          title: "No help tokens left",
+                          description: "You've used all available hints at this checkpoint.",
+                        });
+                        return;
+                      }
+                      await helpMutation.mutateAsync({
+                        teamId: team.id,
+                        checkpointId: checkpoint.id,
+                        riddleId,
+                      });
+                    }}
+                  />
+                )}
+              </div>
             </div>
 
-            {/* Game Status */}
-            {team.status === 'pending' && (
-              <Card className="glass-card border-glass-border">
-                <CardHeader>
-                  <CardTitle className="text-foreground">Waiting for Game to Start</CardTitle>
-                  <CardDescription className="text-muted-foreground">
-                    Your team is registered and ready! The treasure hunt will begin soon.
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center space-x-2 text-warning">
-                    <div className="w-3 h-3 bg-warning rounded-full animate-pulse"></div>
-                    <span className="text-sm">Standby - Game starting soon</span>
-                  </div>
-                </CardContent>
+            <div className="space-y-6">
+              <SubmissionTimeline submissions={submissions} />
+              <Card className="glass-card border-glass-border p-6">
+                <h3 className="text-lg font-semibold text-foreground mb-3">Checkpoint intel</h3>
+                {checkpoint ? (
+                  <ul className="text-sm space-y-2 text-muted-foreground">
+                    <li><strong className="text-foreground">Location:</strong> {checkpoint.name}</li>
+                    {checkpoint.clue_text && (
+                      <li><strong className="text-foreground">Clue:</strong> {checkpoint.clue_text}</li>
+                    )}
+                    {checkpoint.help_token_hint && (
+                      <li><strong className="text-foreground">Help token hint:</strong> {checkpoint.help_token_hint}</li>
+                    )}
+                    <li><strong className="text-foreground">Radius:</strong> {checkpointRadius} m</li>
+                    {distanceToCheckpoint !== null && (
+                      <li>
+                        <strong className="text-foreground">Distance:</strong> {Math.round(distanceToCheckpoint)} m
+                      </li>
+                    )}
+                  </ul>
+                ) : (
+                  <p className="text-sm text-muted-foreground">Awaiting your first checkpoint...</p>
+                )}
               </Card>
-            )}
-
-            {team.status === 'active' && (
-              <Card className="glass-card border-glass-border">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2 text-foreground">
-                    <MapPin className="h-5 w-5 text-primary" />
-                    Current Checkpoint
-                  </CardTitle>
-                  <CardDescription className="text-muted-foreground">
-                    Your next location and riddle will appear here
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="text-center py-8">
-                    <div className="w-16 h-16 bg-muted rounded-full flex items-center justify-center mx-auto mb-4">
-                      <MapPin className="h-8 w-8 text-muted-foreground" />
-                    </div>
-                    <p className="text-muted-foreground">No active checkpoint available</p>
-                    <p className="text-sm text-muted-foreground mt-2">
-                      Check back soon or contact game administrators
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            {team.status === 'completed' && (
-              <Card className="glass-card border-glass-border bg-gradient-success">
-                <CardHeader>
-                  <CardTitle className="text-white">🎉 Congratulations!</CardTitle>
-                  <CardDescription className="text-green-100">
-                    Your team has completed the treasure hunt!
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <p className="text-white">
-                    Final Score: <span className="font-bold text-2xl">{team.current_score}</span>
-                  </p>
-                  <Button 
-                    className="mt-4" 
-                    variant="secondary"
-                    onClick={() => navigate('/leaderboard')}
-                  >
-                    View Final Rankings
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
+            </div>
           </div>
-        ) : (
-          <Card className="glass-card border-glass-border max-w-md mx-auto">
-            <CardHeader>
-              <CardTitle className="text-foreground">No Team Found</CardTitle>
-              <CardDescription className="text-muted-foreground">
-                You don't appear to be registered for any team.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button 
-                className="w-full bg-gradient-primary hover:glow-primary transition-glow"
-                onClick={() => navigate('/register')}
-              >
-                Register Your Team
-              </Button>
-            </CardContent>
-          </Card>
         )}
       </div>
     </div>
