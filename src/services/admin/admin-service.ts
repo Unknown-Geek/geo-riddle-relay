@@ -5,19 +5,7 @@ export type TeamRow = Tables<"teams">;
 export type CheckpointRow = Tables<"checkpoints">;
 export type RiddleRow = Tables<"riddles">;
 export type SubmissionRow = Tables<"submissions">;
-export type AdminUserRow = Tables<"admin_users">;
 export type ActivityLogRow = Tables<"activity_logs">;
-
-export async function getAdminProfile(email: string) {
-  const { data, error } = await supabase
-    .from("admin_users")
-    .select("*")
-    .eq("email", email)
-    .maybeSingle();
-
-  if (error) throw error;
-  return data as (AdminUserRow | null);
-}
 
 // Teams CRUD
 export async function getAllTeams() {
