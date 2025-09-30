@@ -6,15 +6,20 @@ import bcrypt from 'bcryptjs';
 const SUPABASE_URL = process.env.SUPABASE_URL ?? process.env.VITE_SUPABASE_URL;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
-if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-  console.error('\u274c  Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables.');
-  console.error('    -> Set them temporarily when running this script, e.g.');
-  console.error('       SUPABASE_URL="https://..." SUPABASE_SERVICE_ROLE_KEY="..." node scripts/seed-admin.mjs');
+if (!SUPABASE_URL) {
+  console.error('\u274c  Missing SUPABASE_URL or VITE_SUPABASE_URL environment variable.');
   process.exit(1);
 }
 
-const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? 'REDACTED_EMAIL';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? 'REDACTED_PASSWORD';
+if (!SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('\u274c  Missing SUPABASE_SERVICE_ROLE_KEY environment variable.');
+  console.error('    -> On Vercel, add this as an environment variable in your project settings.');
+  console.error('    -> You can find this key in your Supabase project settings under API.');
+  process.exit(1);
+}
+
+const ADMIN_EMAIL = process.env.ADMIN_EMAIL ?? process.env.VITE_ADMIN_EMAIL ?? 'REDACTED_EMAIL';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD ?? process.env.VITE_ADMIN_PASSWORD ?? 'REDACTED_PASSWORD';
 const ADMIN_FULL_NAME = process.env.ADMIN_FULL_NAME ?? 'Treasure Hunt Admin';
 const ADMIN_ROLE = process.env.ADMIN_ROLE ?? 'super_admin';
 
@@ -36,7 +41,7 @@ async function clearGameData() {
   ];
 
   for (const table of tables) {
-    const { error } = await supabase.from(table).delete().neq('id', '');
+    const { error } = await supabase.from(table).delete().gt('created_at', '1900-01-01');
     if (error) {
       throw new Error(`Failed to clear table ${table}: ${error.message}`);
     }
