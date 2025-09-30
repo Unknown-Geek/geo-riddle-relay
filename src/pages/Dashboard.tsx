@@ -46,26 +46,16 @@ const Dashboard = () => {
     }
   }, [loading, navigate, user]);
 
-  const teamQuery = useQuery({
-    queryKey: ["team", user?.email],
-    queryFn: async () => {
-      if (!user?.email) return null;
-      return getTeamByLeaderEmail(user.email);
-    },
-    enabled: !!user?.email,
-    refetchOnWindowFocus: false,
-  });
-
-  const team = teamQuery.data ?? null;
+  // In the new system, user IS the team object, so no need to fetch separately
+  const team = user;
 
   useEffect(() => {
     if (!team?.id) return;
     const unsubscribe = subscribeToTeamUpdates(team.id, () => {
-      queryClient.invalidateQueries({ queryKey: ["team", user?.email] });
       queryClient.invalidateQueries({ queryKey: ["submissions", team.id] });
     });
     return unsubscribe;
-  }, [queryClient, team?.id, user?.email]);
+  }, [queryClient, team?.id]);
 
   const checkpointQuery = useQuery({
     queryKey: ["checkpoint", team?.current_checkpoint_id, team?.status],
@@ -115,7 +105,6 @@ const Dashboard = () => {
         description: data?.message ?? "We recorded your attempt.",
       });
       queryClient.invalidateQueries({ queryKey: ["submissions", team?.id] });
-      queryClient.invalidateQueries({ queryKey: ["team", user?.email] });
     },
     onError: (err: any) => {
       toast({
@@ -139,7 +128,7 @@ const Dashboard = () => {
         title: "Help token redeemed",
         description: data?.hint ?? "Hint granted. Check your notifications!",
       });
-      queryClient.invalidateQueries({ queryKey: ["team", user?.email] });
+      // Team data is already in user object, no need to invalidate
     },
     onError: (err: any) => {
       toast({
@@ -167,7 +156,7 @@ const Dashboard = () => {
     </div>
   );
 
-  if (loading || teamQuery.isLoading) {
+  if (loading) {
     return renderLoading();
   }
 
