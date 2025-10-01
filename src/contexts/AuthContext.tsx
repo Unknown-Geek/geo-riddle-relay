@@ -78,12 +78,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { error: errorMsg };
       }
 
-      // Temporary password check until database is updated with password_hash column
-      // For now, use a simple pattern: teamname123 (lowercase, no spaces)
-      const expectedPassword = `${teams.name.toLowerCase().replace(/\s+/g, '')}123`;
+      // Check password against localStorage (temporary solution)
+      const storedPassword = localStorage.getItem(`team_password_${email}`);
       
-      if (password !== expectedPassword) {
-        const errorMsg = `Invalid password. Use: ${teams.name.toLowerCase().replace(/\s+/g, '')}123`;
+      if (!storedPassword || password !== storedPassword) {
+        const errorMsg = "Invalid password";
         toast({
           variant: "destructive", 
           title: "Sign in failed",
