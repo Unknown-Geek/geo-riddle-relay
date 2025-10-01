@@ -96,12 +96,12 @@ const Register = () => {
       }
 
       // Create team record directly (no auth required)
+      // Note: password_hash column doesn't exist yet - using temporary password system
       const { error: teamError, data: teamData } = await supabase
         .from('teams')
         .insert({
           name: formData.teamName,
           leader_email: formData.leaderEmail,
-          password_hash: formData.password, // For simplicity, storing plaintext (use bcrypt in production)
           member_names: filledMembers,
           status: 'pending',
           team_color: formData.teamColor,
@@ -131,7 +131,7 @@ const Register = () => {
 
       toast({
         title: "Registration successful!",
-        description: "Your team is ready. Head to your dashboard to begin.",
+        description: `Team registered! Your login password is: ${formData.teamName.toLowerCase().replace(/\s+/g, '')}123`,
       });
 
       navigate('/dashboard');
@@ -238,30 +238,12 @@ const Register = () => {
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="password" className="text-foreground">Password</Label>
-                      <Input
-                        id="password"
-                        type="password"
-                        placeholder="Create a password"
-                        value={formData.password}
-                        onChange={(e) => handleInputChange('password', e.target.value)}
-                        required
-                        className="bg-input border-border"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="confirmPassword" className="text-foreground">Confirm Password</Label>
-                      <Input
-                        id="confirmPassword"
-                        type="password"
-                        placeholder="Confirm your password"
-                        value={formData.confirmPassword}
-                        onChange={(e) => handleInputChange('confirmPassword', e.target.value)}
-                        required
-                        className="bg-input border-border"
-                      />
+                  <div className="space-y-3">
+                    <div className="p-3 bg-blue-500/10 border border-blue-500/20 rounded-md">
+                      <p className="text-sm text-blue-400">
+                        <strong>Note:</strong> Your login password will be: <code>{formData.teamName.toLowerCase().replace(/\s+/g, '')}123</code>
+                        {!formData.teamName && " (enter team name first)"}
+                      </p>
                     </div>
                   </div>
                 </div>
