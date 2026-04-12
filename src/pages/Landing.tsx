@@ -1,157 +1,115 @@
-import { useState, useEffect } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '@/contexts/AuthContext';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Compass, Trophy, Users, MapPin } from 'lucide-react';
+import { Link } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
+import { Button } from "@/components/ui/button";
+import { Compass, MapPin, Users, Trophy, ArrowRight } from "lucide-react";
+import { ThemeToggle } from "@/components/theme-toggle";
 
 const Landing = () => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [loading, setLoading] = useState(false);
-  const { signIn, user } = useAuth();
-  const navigate = useNavigate();
-
-  // Redirect if already logged in
-  useEffect(() => {
-    if (user) {
-      navigate('/dashboard');
-    }
-  }, [user, navigate]);
-
-  const handleSignIn = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    
-    const { error } = await signIn(email, password);
-    
-    if (!error) {
-      navigate('/dashboard');
-    }
-    
-    setLoading(false);
-  };
+  const { user } = useAuth();
 
   return (
-    <div className="min-h-screen bg-gradient-hero">
-      {/* Navigation */}
-      <nav className="flex justify-between items-center p-6">
-        <div className="flex items-center space-x-2">
-          <Compass className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl font-bold text-foreground">Campus Treasure Hunt</h1>
+    <div className="min-h-screen bg-background">
+      {/* Header */}
+      <header className="border-b border-border">
+        <div className="container mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-2">
+            <Compass className="h-5 w-5 text-primary" />
+            <span className="font-semibold tracking-tight">Riddle Relay</span>
+          </Link>
+          <div className="flex items-center gap-2">
+            <ThemeToggle />
+            {user ? (
+              <Button variant="outline" size="sm" asChild>
+                <Link to="/dashboard">Dashboard</Link>
+              </Button>
+            ) : (
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" asChild>
+                  <Link to="/auth">Sign in</Link>
+                </Button>
+                <Button size="sm" asChild>
+                  <Link to="/auth?signup=true">Get started</Link>
+                </Button>
+              </div>
+            )}
+          </div>
         </div>
-        <Link to="/leaderboard">
-          <Button variant="outline" className="glass-card">
-            <Trophy className="h-4 w-4 mr-2" />
-            Leaderboard
-          </Button>
-        </Link>
-      </nav>
+      </header>
 
-      <div className="container mx-auto px-6 py-12">
-        <div className="grid lg:grid-cols-2 gap-12 items-center">
-          {/* Hero Content */}
-          <div className="space-y-8">
-            <div className="space-y-4">
-              <h2 className="text-5xl font-bold text-foreground leading-tight">
-                Discover Your
-                <span className="text-primary"> Campus</span>
-                <br />
-                Like Never Before
-              </h2>
-              <p className="text-xl text-muted-foreground leading-relaxed">
-                Join the ultimate geofencing treasure hunt. Solve riddles, explore landmarks, 
-                and compete with your team for glory across your college campus.
+      {/* Hero */}
+      <section className="container mx-auto px-4 sm:px-6 py-20 sm:py-32">
+        <div className="max-w-3xl mx-auto text-center">
+          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight leading-tight">
+            GPS treasure hunts,<br />
+            <span className="text-primary">made simple</span>
+          </h1>
+          <p className="mt-6 text-lg text-muted-foreground max-w-xl mx-auto leading-relaxed">
+            Create and play location-based riddle events. Teams navigate to real-world
+            checkpoints, unlock riddles with GPS, and compete on live leaderboards.
+          </p>
+          <div className="mt-10 flex flex-col sm:flex-row items-center justify-center gap-3">
+            <Button size="lg" asChild className="w-full sm:w-auto">
+              <Link to="/join">
+                Join a hunt <ArrowRight className="ml-2 h-4 w-4" />
+              </Link>
+            </Button>
+            <Button variant="outline" size="lg" asChild className="w-full sm:w-auto">
+              <Link to="/auth?signup=true&role=organizer">
+                Organize an event
+              </Link>
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      {/* Features */}
+      <section className="border-t border-border bg-muted/30">
+        <div className="container mx-auto px-4 sm:px-6 py-20">
+          <div className="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+            <div className="space-y-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10">
+                <MapPin className="h-5 w-5 text-primary" />
+              </div>
+              <h3 className="font-semibold">GPS Checkpoints</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Riddles unlock only when your team reaches the physical location.
+                Real-world exploration, not just screen time.
               </p>
             </div>
-
-            {/* Features */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="text-center space-y-2">
-                <MapPin className="h-8 w-8 text-primary mx-auto" />
-                <h3 className="font-semibold text-foreground">Location-Based</h3>
-                <p className="text-sm text-muted-foreground">Unlock clues by reaching real campus locations</p>
+            <div className="space-y-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10">
+                <Users className="h-5 w-5 text-primary" />
               </div>
-              <div className="text-center space-y-2">
-                <Users className="h-8 w-8 text-accent mx-auto" />
-                <h3 className="font-semibold text-foreground">Team Play</h3>
-                <p className="text-sm text-muted-foreground">Collaborate with up to 4 team members</p>
-              </div>
-              <div className="text-center space-y-2">
-                <Trophy className="h-8 w-8 text-warning mx-auto" />
-                <h3 className="font-semibold text-foreground">Real-Time Scoring</h3>
-                <p className="text-sm text-muted-foreground">Compete on live leaderboards</p>
-              </div>
+              <h3 className="font-semibold">Team Play</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Register as a team leader, share your team code, and play together.
+                Up to 4 members per team.
+              </p>
             </div>
-
-            <div className="flex flex-col sm:flex-row gap-4">
-              <Link to="/register">
-                <Button size="lg" className="bg-gradient-primary hover:glow-primary transition-glow w-full sm:w-auto">
-                  Register Your Team
-                </Button>
-              </Link>
-              <Link to="/leaderboard">
-                <Button variant="outline" size="lg" className="glass-card w-full sm:w-auto">
-                  View Leaderboard
-                </Button>
-              </Link>
+            <div className="space-y-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10">
+                <Trophy className="h-5 w-5 text-primary" />
+              </div>
+              <h3 className="font-semibold">Live Leaderboard</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Real-time scoring with time-based penalties. See how your team
+                stacks up as the hunt unfolds.
+              </p>
             </div>
-          </div>
-
-          {/* Login Form */}
-          <div className="flex justify-center">
-            <Card className="w-full max-w-md glass-card border-glass-border">
-              <CardHeader className="text-center">
-                <CardTitle className="text-2xl text-foreground">Team Leader Login</CardTitle>
-                <CardDescription className="text-muted-foreground">
-                  Sign in to access your team's dashboard
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <form onSubmit={handleSignIn} className="space-y-4">
-                  <div className="space-y-2">
-                    <Input
-                      type="email"
-                      placeholder="Team leader email"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      required
-                      className="bg-input border-border"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Input
-                      type="password"
-                      placeholder="Password"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      required
-                      className="bg-input border-border"
-                    />
-                  </div>
-                  <Button 
-                    type="submit" 
-                    className="w-full bg-gradient-primary hover:glow-primary transition-glow"
-                    disabled={loading}
-                  >
-                    {loading ? 'Signing In...' : 'Sign In'}
-                  </Button>
-                </form>
-                
-                <div className="mt-6 text-center">
-                  <p className="text-sm text-muted-foreground">
-                    Don't have a team account?{' '}
-                    <Link to="/register" className="text-primary hover:underline font-medium">
-                      Register here
-                    </Link>
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
           </div>
         </div>
-      </div>
+      </section>
+
+      {/* Footer */}
+      <footer className="border-t border-border">
+        <div className="container mx-auto px-4 sm:px-6 py-6 flex items-center justify-between">
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Compass className="h-4 w-4" />
+            <span>Riddle Relay</span>
+          </div>
+          <p className="text-xs text-muted-foreground">GPS treasure hunts, made simple</p>
+        </div>
+      </footer>
     </div>
   );
 };

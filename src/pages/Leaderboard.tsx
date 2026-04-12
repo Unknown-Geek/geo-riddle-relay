@@ -1,31 +1,38 @@
-import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { Compass, Trophy, Medal, Award, ArrowLeft } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
-import { getLeaderboard, subscribeToLeaderboard, type TeamRow } from '@/services/player-service';
+import { useEffect, useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import { useEvent } from "@/contexts/EventContext";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Trophy, Medal, Award, Search, Users } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
+import { getLeaderboard, subscribeToLeaderboard } from "@/services/player-service";
+import { AppShell } from "@/components/layout/AppShell";
+import { PageHeader } from "@/components/layout/PageHeader";
+import type { TeamRow } from "@/services/player-service";
 
-type TeamRanking = Pick<TeamRow, 'id' | 'name' | 'current_score' | 'status' | 'member_names' | 'team_color' | 'avatar_url'>;
+type LeaderboardTeam = Pick<TeamRow, "id" | "name" | "current_score" | "status" | "team_color" | "team_code">;
 
 const Leaderboard = () => {
-  const [teams, setTeams] = useState<TeamRanking[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+  const { currentEvent } = useEvent();
   const { toast } = useToast();
+  const eventId = currentEvent?.id;
+
+  const [teams, setTeams] = useState<LeaderboardTeam[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
+    if (!eventId) return;
+
     const load = async () => {
       try {
-        const data = await getLeaderboard();
+        const data = await getLeaderboard(eventId);
         setTeams(data ?? []);
       } catch (error: any) {
-        toast({
-          variant: 'destructive',
-          title: 'Error loading leaderboard',
-          description: error?.message ?? 'Please try again.',
-        });
+        toast({ variant: "destructive", title: "Error loading leaderboard", description: error?.message });
       } finally {
         setLoading(false);
       }
@@ -33,196 +40,122 @@ const Leaderboard = () => {
 
     load();
 
-    const unsubscribe = subscribeToLeaderboard(() => {
-      load();
-    });
-
+    const unsubscribe = subscribeToLeaderboard(eventId, load);
     return unsubscribe;
-  }, [toast]);
+  }, [eventId, toast]);
 
-  const fetchLeaderboard = async () => {
-    try {
-      const data = await getLeaderboard();
-      setTeams(data ?? []);
-    } catch (error: any) {
-      toast({
-        variant: 'destructive',
-        title: 'Error refreshing leaderboard',
-        description: error?.message ?? 'Please try again.',
-      });
-    }
-  };
-
-  const getRankIcon = (position: number) => {
-    switch (position) {
-      case 1:
-        return <Trophy className="h-6 w-6 text-yellow-500" />;
-      case 2:
-        return <Medal className="h-6 w-6 text-gray-400" />;
-      case 3:
-        return <Award className="h-6 w-6 text-amber-600" />;
-      default:
-        return <span className="text-lg font-bold text-muted-foreground">{position}</span>;
-    }
-  };
-
-  const getStatusBadgeVariant = (status: string) => {
-    switch (status) {
-      case 'active': return 'default';
-      case 'completed': return 'secondary';
-      case 'pending': return 'outline';
-      case 'disqualified': return 'destructive';
-      default: return 'outline';
-    }
-  };
+  const filteredTeams = teams.filter(t =>
+    t.name.toLowerCase().includes(search.toLowerCase())
+  );
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gradient-hero flex items-center justify-center">
-        <div className="text-center space-y-4">
-          <Trophy className="h-12 w-12 text-primary mx-auto animate-pulse" />
-          <p className="text-foreground">Loading leaderboard...</p>
+      <AppShell role="player" eventName={currentEvent?.name}>
+        <div className="p-6 space-y-3">
+          <Skeleton className="h-8 w-40" />
+          {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
         </div>
-      </div>
+      </AppShell>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gradient-hero">
-      {/* Navigation */}
-      <nav className="flex justify-between items-center p-6 border-b border-border">
-        <Link to="/" className="flex items-center space-x-2">
-          <ArrowLeft className="h-5 w-5 text-primary" />
-          <Compass className="h-8 w-8 text-primary" />
-          <h1 className="text-2xl font-bold text-foreground">Campus Treasure Hunt</h1>
-        </Link>
-      </nav>
+    <AppShell role="player" eventName={currentEvent?.name}>
+      <div className="p-4 sm:p-6 space-y-6">
+        <PageHeader
+          title="Leaderboard"
+          description={currentEvent?.name ?? ""}
+          actions={
+            <div className="relative w-48">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search teams..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                className="pl-9 h-8 text-sm"
+              />
+            </div>
+          }
+        />
 
-      <div className="container mx-auto px-6 py-8">
-        <div className="text-center mb-8">
-          <h2 className="text-4xl font-bold text-foreground mb-2">🏆 Leaderboard</h2>
-          <p className="text-muted-foreground">
-            See how all teams are performing in the treasure hunt
-          </p>
-        </div>
+        {filteredTeams.length === 0 ? (
+          <Card>
+            <CardContent className="p-8 text-center">
+              <Trophy className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground">No teams yet</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <div className="space-y-2">
+            {/* Podium for top 3 */}
+            {filteredTeams.length >= 3 && !search && (
+              <div className="grid grid-cols-3 gap-3 mb-4">
+                {/* 2nd place */}
+                <Card className="text-center">
+                  <CardContent className="p-3 pt-6">
+                    <Medal className="h-6 w-6 text-muted-foreground mx-auto mb-1" />
+                    <p className="text-xs font-medium truncate">{filteredTeams[1].name}</p>
+                    <p className="text-lg font-bold">{filteredTeams[1].current_score}</p>
+                  </CardContent>
+                </Card>
+                {/* 1st place */}
+                <Card className="border-primary/30 text-center">
+                  <CardContent className="p-3 pt-4">
+                    <Trophy className="h-8 w-8 text-warning mx-auto mb-1" />
+                    <p className="text-xs font-medium truncate">{filteredTeams[0].name}</p>
+                    <p className="text-xl font-bold">{filteredTeams[0].current_score}</p>
+                  </CardContent>
+                </Card>
+                {/* 3rd place */}
+                <Card className="text-center">
+                  <CardContent className="p-3 pt-6">
+                    <Award className="h-6 w-6 text-amber-700 mx-auto mb-1" />
+                    <p className="text-xs font-medium truncate">{filteredTeams[2].name}</p>
+                    <p className="text-lg font-bold">{filteredTeams[2].current_score}</p>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
 
-        <div className="max-w-4xl mx-auto">
-          {teams.length === 0 ? (
-            <Card className="glass-card border-glass-border text-center">
-              <CardHeader>
-                <CardTitle className="text-foreground">No Teams Yet</CardTitle>
-                <CardDescription className="text-muted-foreground">
-                  Be the first to register for the treasure hunt!
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Link to="/register">
-                  <Button className="bg-gradient-primary hover:glow-primary transition-glow">
-                    Register Your Team
-                  </Button>
-                </Link>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              {teams.map((team, index) => {
-                const position = index + 1;
-                const isTopThree = position <= 3;
-                
-                return (
-                  <Card 
-                    key={team.id} 
-                    className={`glass-card border-glass-border ${
-                      isTopThree ? 'glow-primary' : ''
-                    } transition-glow`}
-                  >
-                    <CardContent className="p-6">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center space-x-4">
-                          {/* Rank */}
-                          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-muted">
-                            {getRankIcon(position)}
-                          </div>
-                          
-                          {/* Team Info */}
-                          <div className="space-y-1">
-                            <div className="flex items-center space-x-3">
-                              <Avatar className="h-10 w-10 border"
-                                style={{ borderColor: team.team_color ?? '#00d9ff' }}>
-                                {team.avatar_url ? (
-                                  <AvatarImage src={team.avatar_url} alt={team.name} />
-                                ) : (
-                                  <AvatarFallback>
-                                    {team.name
-                                      .split(' ')
-                                      .map((n) => n[0])
-                                      .join('')
-                                      .slice(0, 2)
-                                      .toUpperCase()}
-                                  </AvatarFallback>
-                                )}
-                              </Avatar>
-                              <div>
-                                <div className="flex items-center gap-2 flex-wrap">
-                                  <h3 className="text-xl font-bold text-foreground">{team.name}</h3>
-                                  <div
-                                    className="w-4 h-4 rounded-full border-2 border-border"
-                                    style={{ backgroundColor: team.team_color }}
-                                  ></div>
-                                  <Badge variant={getStatusBadgeVariant(team.status)}>
-                                    {team.status}
-                                  </Badge>
-                                </div>
-                                <p className="text-sm text-muted-foreground">
-                                  {team.member_names.length} member{team.member_names.length !== 1 ? 's' : ''}
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+            {/* Full table */}
+            <Card>
+              <div className="divide-y divide-border">
+                {filteredTeams.map((team, index) => {
+                  const position = index + 1;
+                  const isTopThree = position <= 3;
 
-                        {/* Score */}
-                        <div className="text-right">
-                          <div className="text-3xl font-bold text-foreground">
-                            {team.current_score}
+                  return (
+                    <div key={team.id} className="flex items-center justify-between px-4 py-3">
+                      <div className="flex items-center gap-3">
+                        <span className={`text-sm w-6 text-center ${isTopThree ? "font-bold" : "text-muted-foreground"}`}>
+                          {position}
+                        </span>
+                        <div
+                          className="w-2 h-2 rounded-full"
+                          style={{ backgroundColor: team.team_color ?? "#5E6AD2" }}
+                        />
+                        <div>
+                          <p className="text-sm font-medium">{team.name}</p>
+                          <div className="flex items-center gap-1.5">
+                            <Badge variant="outline" className="text-[10px] h-4">
+                              {team.status}
+                            </Badge>
                           </div>
-                          <p className="text-sm text-muted-foreground">points</p>
                         </div>
                       </div>
-
-                      {/* Team Members */}
-                      {isTopThree && (
-                        <div className="mt-4 pt-4 border-t border-border">
-                          <p className="text-xs text-muted-foreground mb-2">Team Members:</p>
-                          <div className="flex flex-wrap gap-2">
-                            {team.member_names.map((member, memberIndex) => (
-                              <Badge key={memberIndex} variant="outline" className="text-xs">
-                                {member}
-                              </Badge>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
-          )}
-
-          <div className="mt-8 text-center flex justify-center gap-3">
-            <Link to="/">
-              <Button variant="outline" className="glass-card">
-                Back to Home
-              </Button>
-            </Link>
-            <Button variant="ghost" onClick={fetchLeaderboard} className="glass-card">
-              Refresh
-            </Button>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold">{team.current_score}</p>
+                        <p className="text-xs text-muted-foreground">pts</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </Card>
           </div>
-        </div>
+        )}
       </div>
-    </div>
+    </AppShell>
   );
 };
 

@@ -1,31 +1,21 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { useToast } from '@/hooks/use-toast';
-import bcrypt from 'bcryptjs';
+import { createContext, useContext, useEffect, useState } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import type { User, Session } from "@supabase/supabase-js";
 
-// Team interface for our custom auth
-interface Team {
+export interface Profile {
   id: string;
-  name: string;
-  leader_email: string;
-  password_hash?: string;
-  member_names: string[];
-  status: string;
-  current_score: number;
-  current_checkpoint_id?: string;
-  team_color: string;
-  avatar_url?: string;
+  full_name: string | null;
+  avatar_url: string | null;
+  role: "organizer" | "player";
   created_at: string;
-  updated_at: string;
-  completed_at?: string;
-  help_tokens_used: number;
 }
 
 interface AuthContextType {
-  user: Team | null;
-  session: Team | null;
+  user: User | null;
+  session: Session | null;
+  profile: Profile | null;
   loading: boolean;
-  signUp: (email: string, password: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
 }
@@ -33,118 +23,100 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<Team | null>(null);
-  const [session, setSession] = useState<Team | null>(null);
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
 
   useEffect(() => {
-    // Check for existing session in localStorage
-    const storedTeam = localStorage.getItem('team_session');
-    if (storedTeam) {
-      try {
-        const team = JSON.parse(storedTeam);
-        setUser(team);
-        setSession(team);
-      } catch (error) {
-        console.error('Failed to parse stored team session:', error);
-        localStorage.removeItem('team_session');
+    // Get initial session
+    supabase.auth.getSession().then(({ data: { session: s } }) => {
+      setSession(s);
+      setUser(s?.user ?? null);
+      if (s?.user) {
+        fetchProfile(s.user.id);
+      } else {
+        setLoading(false);
       }
-    }
-    setLoading(false);
+    });
+
+    // Listen for auth changes
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(
+      (_event, s) => {
+        setSession(s);
+        setUser(s?.user ?? null);
+        if (s?.user) {
+          fetchProfile(s.user.id);
+        } else {
+          setProfile(null);
+          setLoading(false);
+        }
+      }
+    );
+
+    return () => subscription.unsubscribe();
   }, []);
 
-  const signUp = async (email: string, password: string) => {
-    // This is now handled by the Register component directly
-    // Just return success - registration creates teams directly in DB
-    return { error: null };
+  const fetchProfile = async (userId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from("profiles")
+        .select("*")
+        .eq("id", userId)
+        .single();
+
+      if (error) throw error;
+      setProfile(data as Profile);
+    } catch (err) {
+      console.error("Failed to fetch profile:", err);
+      setProfile(null);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signUp = async (email: string, password: string, fullName: string) => {
+    try {
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          data: { full_name: fullName },
+        },
+      });
+
+      if (error) return { error: error.message };
+      return { error: null };
+    } catch (err: any) {
+      return { error: err.message ?? "Sign up failed" };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
     try {
-      // Query teams table directly for authentication
-      const { data: teams, error } = await supabase
-        .from('teams')
-        .select('*')
-        .eq('leader_email', email)
-        .single();
-
-      if (error || !teams) {
-        const errorMsg = "Invalid email or team not found";
-        toast({
-          variant: "destructive",
-          title: "Sign in failed",
-          description: errorMsg,
-        });
-        return { error: errorMsg };
-      }
-
-      // Verify password against bcrypt hash stored in DB
-      const passwordHash = (teams as any).password_hash as string | undefined;
-
-      if (!passwordHash) {
-        // Fallback: check localStorage for legacy passwords
-        const storedPassword = localStorage.getItem(`team_password_${email}`);
-        if (!storedPassword || password !== storedPassword) {
-          const errorMsg = "Invalid password";
-          toast({
-            variant: "destructive",
-            title: "Sign in failed",
-            description: errorMsg,
-          });
-          return { error: errorMsg };
-        }
-      } else {
-        const passwordMatches = await bcrypt.compare(password, passwordHash);
-        if (!passwordMatches) {
-          const errorMsg = "Invalid password";
-          toast({
-            variant: "destructive",
-            title: "Sign in failed",
-            description: errorMsg,
-          });
-          return { error: errorMsg };
-        }
-      }
-
-      // Set user session
-      setUser(teams);
-      setSession(teams);
-
-      // Store in localStorage for persistence
-      localStorage.setItem('team_session', JSON.stringify(teams));
-
-      toast({
-        title: "Welcome back!",
-        description: `Signed in as ${teams.name}`,
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
       });
 
+      if (error) return { error: error.message };
       return { error: null };
-    } catch (error) {
-      const errorMsg = "Sign in failed. Please try again.";
-      toast({
-        variant: "destructive",
-        title: "Sign in failed",
-        description: errorMsg,
-      });
-      return { error: errorMsg };
+    } catch (err: any) {
+      return { error: err.message ?? "Sign in failed" };
     }
   };
 
   const signOut = async () => {
+    await supabase.auth.signOut();
     setUser(null);
     setSession(null);
-    localStorage.removeItem('team_session');
-    
-    toast({
-      title: "Signed out",
-      description: "You have been successfully signed out.",
-    });
+    setProfile(null);
   };
 
   const value = {
     user,
     session,
+    profile,
     loading,
     signUp,
     signIn,
@@ -157,7 +129,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };

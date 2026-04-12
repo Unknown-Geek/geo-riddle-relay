@@ -7,212 +7,299 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
     PostgrestVersion: "13.0.5"
   }
   public: {
     Tables: {
-      activity_logs: {
+      profiles: {
         Row: {
-          action_type: string
-          admin_id: string | null
-          created_at: string | null
-          description: string
           id: string
-          ip_address: unknown | null
-          metadata: Json | null
-          team_id: string | null
-          user_agent: string | null
+          full_name: string | null
+          avatar_url: string | null
+          role: Database["public"]["Enums"]["user_role"]
+          created_at: string | null
+          updated_at: string | null
         }
         Insert: {
-          action_type: string
-          admin_id?: string | null
+          id: string
+          full_name?: string | null
+          avatar_url?: string | null
+          role?: Database["public"]["Enums"]["user_role"]
           created_at?: string | null
-          description: string
-          id?: string
-          ip_address?: unknown | null
-          metadata?: Json | null
-          team_id?: string | null
-          user_agent?: string | null
+          updated_at?: string | null
         }
         Update: {
-          action_type?: string
-          admin_id?: string | null
-          created_at?: string | null
-          description?: string
           id?: string
-          ip_address?: unknown | null
-          metadata?: Json | null
-          team_id?: string | null
-          user_agent?: string | null
+          full_name?: string | null
+          avatar_url?: string | null
+          role?: Database["public"]["Enums"]["user_role"]
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      events: {
+        Row: {
+          id: string
+          name: string
+          slug: string
+          description: string | null
+          cover_image_url: string | null
+          organizer_id: string
+          start_time: string | null
+          end_time: string | null
+          status: Database["public"]["Enums"]["event_status"]
+          settings: Json | null
+          invite_code: string
+          created_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          slug: string
+          description?: string | null
+          cover_image_url?: string | null
+          organizer_id: string
+          start_time?: string | null
+          end_time?: string | null
+          status?: Database["public"]["Enums"]["event_status"]
+          settings?: Json | null
+          invite_code?: string
+          created_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          slug?: string
+          description?: string | null
+          cover_image_url?: string | null
+          organizer_id?: string
+          start_time?: string | null
+          end_time?: string | null
+          status?: Database["public"]["Enums"]["event_status"]
+          settings?: Json | null
+          invite_code?: string
+          created_at?: string | null
+          updated_at?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "activity_logs_admin_id_fkey"
-            columns: ["admin_id"]
+            foreignKeyName: "events_organizer_id_fkey"
+            columns: ["organizer_id"]
             isOneToOne: false
-            referencedRelation: "admin_users"
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      teams: {
+        Row: {
+          id: string
+          name: string
+          avatar_url: string | null
+          member_names: string[] | null
+          leader_email: string | null
+          password_hash: string | null
+          team_color: string | null
+          status: Database["public"]["Enums"]["team_status"] | null
+          current_checkpoint_id: string | null
+          current_score: number | null
+          help_tokens_used: number | null
+          completed_at: string | null
+          created_at: string | null
+          updated_at: string | null
+          event_id: string | null
+          team_code: string | null
+          leader_id: string | null
+        }
+        Insert: {
+          id?: string
+          name: string
+          avatar_url?: string | null
+          member_names?: string[] | null
+          leader_email?: string | null
+          password_hash?: string | null
+          team_color?: string | null
+          status?: Database["public"]["Enums"]["team_status"] | null
+          current_checkpoint_id?: string | null
+          current_score?: number | null
+          help_tokens_used?: number | null
+          completed_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+          event_id?: string | null
+          team_code?: string | null
+          leader_id?: string | null
+        }
+        Update: {
+          id?: string
+          name?: string
+          avatar_url?: string | null
+          member_names?: string[] | null
+          leader_email?: string | null
+          password_hash?: string | null
+          team_color?: string | null
+          status?: Database["public"]["Enums"]["team_status"] | null
+          current_checkpoint_id?: string | null
+          current_score?: number | null
+          help_tokens_used?: number | null
+          completed_at?: string | null
+          created_at?: string | null
+          updated_at?: string | null
+          event_id?: string | null
+          team_code?: string | null
+          leader_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "teams_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
             referencedColumns: ["id"]
           },
           {
-            foreignKeyName: "activity_logs_team_id_fkey"
+            foreignKeyName: "teams_leader_id_fkey"
+            columns: ["leader_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      team_members: {
+        Row: {
+          id: string
+          team_id: string
+          user_id: string
+          display_name: string | null
+          joined_at: string | null
+        }
+        Insert: {
+          id?: string
+          team_id: string
+          user_id: string
+          display_name?: string | null
+          joined_at?: string | null
+        }
+        Update: {
+          id?: string
+          team_id?: string
+          user_id?: string
+          display_name?: string | null
+          joined_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "team_members_team_id_fkey"
             columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "teams"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "team_members_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
         ]
-      }
-      admin_users: {
-        Row: {
-          created_at: string | null
-          email: string
-          full_name: string | null
-          id: string
-          is_active: boolean | null
-          last_login: string | null
-          password_hash: string
-          role: Database["public"]["Enums"]["admin_role"] | null
-        }
-        Insert: {
-          created_at?: string | null
-          email: string
-          full_name?: string | null
-          id?: string
-          is_active?: boolean | null
-          last_login?: string | null
-          password_hash: string
-          role?: Database["public"]["Enums"]["admin_role"] | null
-        }
-        Update: {
-          created_at?: string | null
-          email?: string
-          full_name?: string | null
-          id?: string
-          is_active?: boolean | null
-          last_login?: string | null
-          password_hash?: string
-          role?: Database["public"]["Enums"]["admin_role"] | null
-        }
-        Relationships: []
       }
       checkpoints: {
         Row: {
-          clue_text: string
-          created_at: string | null
-          description: string | null
-          help_token_hint: string | null
           id: string
-          is_active: boolean | null
+          name: string
+          description: string | null
+          clue_text: string
+          help_token_hint: string | null
           latitude: number
           longitude: number
-          name: string
-          order_number: number
           radius_meters: number | null
+          order_number: number
+          is_active: boolean | null
+          event_id: string | null
+          created_at: string | null
           updated_at: string | null
         }
         Insert: {
-          clue_text: string
-          created_at?: string | null
-          description?: string | null
-          help_token_hint?: string | null
           id?: string
-          is_active?: boolean | null
+          name: string
+          description?: string | null
+          clue_text: string
+          help_token_hint?: string | null
           latitude: number
           longitude: number
-          name: string
-          order_number: number
           radius_meters?: number | null
+          order_number: number
+          is_active?: boolean | null
+          event_id?: string | null
+          created_at?: string | null
           updated_at?: string | null
         }
         Update: {
-          clue_text?: string
-          created_at?: string | null
-          description?: string | null
-          help_token_hint?: string | null
           id?: string
-          is_active?: boolean | null
+          name?: string
+          description?: string | null
+          clue_text?: string
+          help_token_hint?: string | null
           latitude?: number
           longitude?: number
-          name?: string
-          order_number?: number
           radius_meters?: number | null
+          order_number?: number
+          is_active?: boolean | null
+          event_id?: string | null
+          created_at?: string | null
           updated_at?: string | null
-        }
-        Relationships: []
-      }
-      game_settings: {
-        Row: {
-          description: string | null
-          id: string
-          setting_key: string
-          setting_value: string
-          updated_at: string | null
-          updated_by: string | null
-        }
-        Insert: {
-          description?: string | null
-          id?: string
-          setting_key: string
-          setting_value: string
-          updated_at?: string | null
-          updated_by?: string | null
-        }
-        Update: {
-          description?: string | null
-          id?: string
-          setting_key?: string
-          setting_value?: string
-          updated_at?: string | null
-          updated_by?: string | null
         }
         Relationships: [
           {
-            foreignKeyName: "game_settings_updated_by_fkey"
-            columns: ["updated_by"]
+            foreignKeyName: "checkpoints_event_id_fkey"
+            columns: ["event_id"]
             isOneToOne: false
-            referencedRelation: "admin_users"
+            referencedRelation: "events"
             referencedColumns: ["id"]
           },
         ]
       }
       riddles: {
         Row: {
-          checkpoint_id: string
-          correct_answer: string
-          created_at: string | null
           id: string
-          is_active: boolean | null
-          max_points: number | null
-          order_number: number | null
+          checkpoint_id: string
           question: string
+          correct_answer: string
+          max_points: number | null
           time_penalty_per_minute: number | null
+          order_number: number | null
+          is_active: boolean | null
+          created_at: string | null
           updated_at: string | null
         }
         Insert: {
-          checkpoint_id: string
-          correct_answer: string
-          created_at?: string | null
           id?: string
-          is_active?: boolean | null
-          max_points?: number | null
-          order_number?: number | null
+          checkpoint_id: string
           question: string
+          correct_answer: string
+          max_points?: number | null
           time_penalty_per_minute?: number | null
+          order_number?: number | null
+          is_active?: boolean | null
+          created_at?: string | null
           updated_at?: string | null
         }
         Update: {
-          checkpoint_id?: string
-          correct_answer?: string
-          created_at?: string | null
           id?: string
-          is_active?: boolean | null
-          max_points?: number | null
-          order_number?: number | null
+          checkpoint_id?: string
           question?: string
+          correct_answer?: string
+          max_points?: number | null
           time_penalty_per_minute?: number | null
+          order_number?: number | null
+          is_active?: boolean | null
+          created_at?: string | null
           updated_at?: string | null
         }
         Relationships: [
@@ -227,46 +314,46 @@ export type Database = {
       }
       submissions: {
         Row: {
-          checkpoint_id: string
-          distance_from_checkpoint: number | null
-          help_token_used: boolean | null
           id: string
+          team_id: string
+          riddle_id: string
+          checkpoint_id: string
+          submitted_answer: string
+          status: Database["public"]["Enums"]["submission_status"]
+          points_awarded: number | null
+          help_token_used: boolean | null
           latitude: number | null
           longitude: number | null
-          points_awarded: number | null
-          riddle_id: string
-          status: Database["public"]["Enums"]["submission_status"]
-          submitted_answer: string
+          distance_from_checkpoint: number | null
           submitted_at: string | null
-          team_id: string
         }
         Insert: {
-          checkpoint_id: string
-          distance_from_checkpoint?: number | null
-          help_token_used?: boolean | null
           id?: string
+          team_id: string
+          riddle_id: string
+          checkpoint_id: string
+          submitted_answer: string
+          status: Database["public"]["Enums"]["submission_status"]
+          points_awarded?: number | null
+          help_token_used?: boolean | null
           latitude?: number | null
           longitude?: number | null
-          points_awarded?: number | null
-          riddle_id: string
-          status: Database["public"]["Enums"]["submission_status"]
-          submitted_answer: string
+          distance_from_checkpoint?: number | null
           submitted_at?: string | null
-          team_id: string
         }
         Update: {
-          checkpoint_id?: string
-          distance_from_checkpoint?: number | null
-          help_token_used?: boolean | null
           id?: string
+          team_id?: string
+          riddle_id?: string
+          checkpoint_id?: string
+          submitted_answer?: string
+          status?: Database["public"]["Enums"]["submission_status"]
+          points_awarded?: number | null
+          help_token_used?: boolean | null
           latitude?: number | null
           longitude?: number | null
-          points_awarded?: number | null
-          riddle_id?: string
-          status?: Database["public"]["Enums"]["submission_status"]
-          submitted_answer?: string
+          distance_from_checkpoint?: number | null
           submitted_at?: string | null
-          team_id?: string
         }
         Relationships: [
           {
@@ -292,66 +379,105 @@ export type Database = {
           },
         ]
       }
-      teams: {
+      activity_logs: {
         Row: {
-          avatar_url: string | null
-          completed_at: string | null
-          created_at: string | null
-          current_checkpoint_id: string | null
-          current_score: number | null
-          help_tokens_used: number | null
           id: string
-          leader_email: string
-          member_names: string[]
-          name: string
-          password_hash: string
-          status: Database["public"]["Enums"]["team_status"] | null
-          team_color: string | null
+          action_type: string
+          description: string
+          metadata: Json | null
+          team_id: string | null
+          admin_id: string | null
+          ip_address: unknown | null
+          user_agent: string | null
+          event_id: string | null
+          created_at: string | null
+        }
+        Insert: {
+          id?: string
+          action_type: string
+          description: string
+          metadata?: Json | null
+          team_id?: string | null
+          admin_id?: string | null
+          ip_address?: unknown | null
+          user_agent?: string | null
+          event_id?: string | null
+          created_at?: string | null
+        }
+        Update: {
+          id?: string
+          action_type?: string
+          description?: string
+          metadata?: Json | null
+          team_id?: string | null
+          admin_id?: string | null
+          ip_address?: unknown | null
+          user_agent?: string | null
+          event_id?: string | null
+          created_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "activity_logs_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "teams"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "activity_logs_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+    }
+    Views: {
+      player_riddles: {
+        Row: {
+          id: string | null
+          checkpoint_id: string | null
+          question: string | null
+          max_points: number | null
+          time_penalty_per_minute: number | null
+          order_number: number | null
+          is_active: boolean | null
+          created_at: string | null
           updated_at: string | null
         }
         Insert: {
-          avatar_url?: string | null
-          completed_at?: string | null
+          id?: string | null
+          checkpoint_id?: string | null
+          question?: string | null
+          max_points?: number | null
+          time_penalty_per_minute?: number | null
+          order_number?: number | null
+          is_active?: boolean | null
           created_at?: string | null
-          current_checkpoint_id?: string | null
-          current_score?: number | null
-          help_tokens_used?: number | null
-          id?: string
-          leader_email: string
-          member_names: string[]
-          name: string
-          password_hash: string
-          status?: Database["public"]["Enums"]["team_status"] | null
-          team_color?: string | null
           updated_at?: string | null
         }
         Update: {
-          avatar_url?: string | null
-          completed_at?: string | null
+          id?: string | null
+          checkpoint_id?: string | null
+          question?: string | null
+          max_points?: number | null
+          time_penalty_per_minute?: number | null
+          order_number?: number | null
+          is_active?: boolean | null
           created_at?: string | null
-          current_checkpoint_id?: string | null
-          current_score?: number | null
-          help_tokens_used?: number | null
-          id?: string
-          leader_email?: string
-          member_names?: string[]
-          name?: string
-          password_hash?: string
-          status?: Database["public"]["Enums"]["team_status"] | null
-          team_color?: string | null
           updated_at?: string | null
         }
         Relationships: []
       }
     }
-    Views: {
-      [_ in never]: never
-    }
     Functions: {
       [_ in never]: never
     }
     Enums: {
-      admin_role: "super_admin" | "game_admin" | "moderator"
+      event_status: "draft" | "active" | "paused" | "completed"
+      user_role: "organizer" | "player"
       submission_status: "correct" | "incorrect" | "invalid"
       team_status: "pending" | "active" | "completed" | "disqualified"
     }
@@ -481,7 +607,8 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
-      admin_role: ["super_admin", "game_admin", "moderator"],
+      event_status: ["draft", "active", "paused", "completed"],
+      user_role: ["organizer", "player"],
       submission_status: ["correct", "incorrect", "invalid"],
       team_status: ["pending", "active", "completed", "disqualified"],
     },
