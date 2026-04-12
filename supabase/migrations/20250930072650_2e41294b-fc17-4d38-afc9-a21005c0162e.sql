@@ -1,7 +1,7 @@
 -- Campus Treasure Hunt Database Schema
 
 -- Enable required extensions
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 -- Create ENUM types for better data integrity
 CREATE TYPE team_status AS ENUM ('pending', 'active', 'completed', 'disqualified');
@@ -10,7 +10,7 @@ CREATE TYPE admin_role AS ENUM ('super_admin', 'game_admin', 'moderator');
 
 -- Teams table
 CREATE TABLE public.teams (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(100) NOT NULL UNIQUE,
     leader_email VARCHAR(255) NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
@@ -28,7 +28,7 @@ CREATE TABLE public.teams (
 
 -- Checkpoints table (physical locations)
 CREATE TABLE public.checkpoints (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     name VARCHAR(255) NOT NULL,
     description TEXT,
     latitude DECIMAL(10, 8) NOT NULL,
@@ -44,7 +44,7 @@ CREATE TABLE public.checkpoints (
 
 -- Riddles table (questions for each checkpoint)
 CREATE TABLE public.riddles (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     checkpoint_id UUID NOT NULL REFERENCES public.checkpoints(id) ON DELETE CASCADE,
     question TEXT NOT NULL,
     correct_answer TEXT NOT NULL,
@@ -58,7 +58,7 @@ CREATE TABLE public.riddles (
 
 -- Team submissions table
 CREATE TABLE public.submissions (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     team_id UUID NOT NULL REFERENCES public.teams(id) ON DELETE CASCADE,
     riddle_id UUID NOT NULL REFERENCES public.riddles(id) ON DELETE CASCADE,
     checkpoint_id UUID NOT NULL REFERENCES public.checkpoints(id) ON DELETE CASCADE,
@@ -74,7 +74,7 @@ CREATE TABLE public.submissions (
 
 -- Admin users table (separate from team auth)
 CREATE TABLE public.admin_users (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     email VARCHAR(255) NOT NULL UNIQUE,
     password_hash TEXT NOT NULL,
     role admin_role DEFAULT 'game_admin',
@@ -86,7 +86,7 @@ CREATE TABLE public.admin_users (
 
 -- Activity logs table
 CREATE TABLE public.activity_logs (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     team_id UUID REFERENCES public.teams(id) ON DELETE SET NULL,
     admin_id UUID REFERENCES public.admin_users(id) ON DELETE SET NULL,
     action_type VARCHAR(100) NOT NULL,
@@ -99,7 +99,7 @@ CREATE TABLE public.activity_logs (
 
 -- Game settings table
 CREATE TABLE public.game_settings (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     setting_key VARCHAR(100) NOT NULL UNIQUE,
     setting_value TEXT NOT NULL,
     description TEXT,
