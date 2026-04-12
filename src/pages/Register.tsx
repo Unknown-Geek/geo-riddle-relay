@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Compass, ArrowLeft, Users } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import bcrypt from 'bcryptjs';
 
 const Register = () => {
   const [formData, setFormData] = useState({
@@ -95,13 +96,15 @@ const Register = () => {
         return;
       }
 
-      // Create team record directly (no auth required)
-      // Note: password_hash column doesn't exist yet - using temporary password system
+      // Hash the password with bcrypt before storing
+      const passwordHash = await bcrypt.hash(formData.password, 10);
+
       const { error: teamError, data: teamData } = await supabase
         .from('teams')
         .insert({
           name: formData.teamName,
           leader_email: formData.leaderEmail,
+          password_hash: passwordHash,
           member_names: filledMembers,
           status: 'pending',
           team_color: formData.teamColor,
@@ -121,16 +124,13 @@ const Register = () => {
         return;
       }
 
-      // Store team info and password in localStorage for dashboard access
+      // Store team info in localStorage for dashboard access
       localStorage.setItem('currentTeam', JSON.stringify({
         id: teamData.id,
         name: teamData.name,
         leader_email: teamData.leader_email,
         status: teamData.status
       }));
-      
-      // Store password for login (temporary solution until database is updated)
-      localStorage.setItem(`team_password_${formData.leaderEmail}`, formData.password);
 
       toast({
         title: "Registration successful!",

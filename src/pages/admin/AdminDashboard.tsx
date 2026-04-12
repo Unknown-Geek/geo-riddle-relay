@@ -18,6 +18,8 @@ import { useToast } from '@/hooks/use-toast';
 import TeamsManagementModal from '@/components/admin/TeamsManagementModal';
 import LeaderboardModal from '@/components/admin/LeaderboardModal';
 import GameSettingsModal from '@/components/admin/GameSettingsModal';
+import CheckpointsManagementModal from '@/components/admin/CheckpointsManagementModal';
+import ActivityLogsModal from '@/components/admin/ActivityLogsModal';
 
 interface DashboardStats {
   totalTeams: number;
@@ -462,9 +464,17 @@ const AdminDashboard = () => {
         isOpen={teamsModalOpen}
         onClose={() => setTeamsModalOpen(false)}
       />
+      <CheckpointsManagementModal
+        isOpen={checkpointsModalOpen}
+        onClose={() => setCheckpointsModalOpen(false)}
+      />
       <LeaderboardModal
         isOpen={leaderboardModalOpen}
         onClose={() => setLeaderboardModalOpen(false)}
+      />
+      <ActivityLogsModal
+        isOpen={activityLogsModalOpen}
+        onClose={() => setActivityLogsModalOpen(false)}
       />
       <GameSettingsModal
         isOpen={gameSettingsModalOpen}

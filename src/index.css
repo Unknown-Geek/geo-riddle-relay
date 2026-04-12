@@ -79,17 +79,17 @@ All colors MUST be HSL. Poppins font family throughout.
     --sidebar-border: 220 13% 91%;
 
     --sidebar-ring: 217.2 91.2% 59.8%;
-  }
 
-  /* Sidebar specific variables for dark theme */
-  --sidebar-background: 220 15% 6%;
-  --sidebar-foreground: 0 0% 90%;
-  --sidebar-primary: 190 100% 50%;
-  --sidebar-primary-foreground: 220 20% 4%;
-  --sidebar-accent: 220 15% 12%;
-  --sidebar-accent-foreground: 0 0% 90%;
-  --sidebar-border: 220 15% 18%;
-  --sidebar-ring: 190 100% 50%;
+    /* Sidebar specific variables for dark theme */
+    --sidebar-background: 220 15% 6%;
+    --sidebar-foreground: 0 0% 90%;
+    --sidebar-primary: 190 100% 50%;
+    --sidebar-primary-foreground: 220 20% 4%;
+    --sidebar-accent: 220 15% 12%;
+    --sidebar-accent-foreground: 0 0% 90%;
+    --sidebar-border: 220 15% 18%;
+    --sidebar-ring: 190 100% 50%;
+  }
 }
 
 @layer base {

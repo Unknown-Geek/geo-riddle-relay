@@ -1,13 +1,14 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import bcrypt from 'bcryptjs';
 
-// Team interface for our custom auth - using database types + optional password
+// Team interface for our custom auth
 interface Team {
   id: string;
   name: string;
   leader_email: string;
-  password_hash?: string; // Optional until database is updated
+  password_hash?: string;
   member_names: string[];
   status: string;
   current_score: number;
@@ -67,7 +68,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         .select('*')
         .eq('leader_email', email)
         .single();
-      
+
       if (error || !teams) {
         const errorMsg = "Invalid email or team not found";
         toast({
@@ -78,37 +79,52 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { error: errorMsg };
       }
 
-      // Check password against localStorage (temporary solution)
-      const storedPassword = localStorage.getItem(`team_password_${email}`);
-      
-      if (!storedPassword || password !== storedPassword) {
-        const errorMsg = "Invalid password";
-        toast({
-          variant: "destructive", 
-          title: "Sign in failed",
-          description: errorMsg,
-        });
-        return { error: errorMsg };
+      // Verify password against bcrypt hash stored in DB
+      const passwordHash = (teams as any).password_hash as string | undefined;
+
+      if (!passwordHash) {
+        // Fallback: check localStorage for legacy passwords
+        const storedPassword = localStorage.getItem(`team_password_${email}`);
+        if (!storedPassword || password !== storedPassword) {
+          const errorMsg = "Invalid password";
+          toast({
+            variant: "destructive",
+            title: "Sign in failed",
+            description: errorMsg,
+          });
+          return { error: errorMsg };
+        }
+      } else {
+        const passwordMatches = await bcrypt.compare(password, passwordHash);
+        if (!passwordMatches) {
+          const errorMsg = "Invalid password";
+          toast({
+            variant: "destructive",
+            title: "Sign in failed",
+            description: errorMsg,
+          });
+          return { error: errorMsg };
+        }
       }
 
       // Set user session
       setUser(teams);
       setSession(teams);
-      
+
       // Store in localStorage for persistence
       localStorage.setItem('team_session', JSON.stringify(teams));
-      
+
       toast({
         title: "Welcome back!",
         description: `Signed in as ${teams.name}`,
       });
-      
+
       return { error: null };
     } catch (error) {
       const errorMsg = "Sign in failed. Please try again.";
       toast({
         variant: "destructive",
-        title: "Sign in failed", 
+        title: "Sign in failed",
         description: errorMsg,
       });
       return { error: errorMsg };

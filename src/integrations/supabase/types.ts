@@ -304,6 +304,7 @@ export type Database = {
           leader_email: string
           member_names: string[]
           name: string
+          password_hash: string
           status: Database["public"]["Enums"]["team_status"] | null
           team_color: string | null
           updated_at: string | null
@@ -319,6 +320,7 @@ export type Database = {
           leader_email: string
           member_names: string[]
           name: string
+          password_hash: string
           status?: Database["public"]["Enums"]["team_status"] | null
           team_color?: string | null
           updated_at?: string | null
@@ -334,6 +336,7 @@ export type Database = {
           leader_email?: string
           member_names?: string[]
           name?: string
+          password_hash?: string
           status?: Database["public"]["Enums"]["team_status"] | null
           team_color?: string | null
           updated_at?: string | null
