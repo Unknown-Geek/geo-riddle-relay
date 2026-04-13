@@ -22,11 +22,12 @@ export function AppShell({ children, role, eventName }: AppShellProps) {
       <Sidebar role={role} eventName={eventName} />
       <div className="flex-1 flex flex-col overflow-hidden">
         {/* Top bar — always visible */}
-        <header className="flex items-center justify-between h-12 px-4 border-b border-border bg-background shrink-0 lg:hidden">
-          <div className="flex items-center gap-2">
+        <header className="flex items-center justify-between h-12 px-4 border-b border-border bg-background shrink-0">
+          <div className="flex items-center gap-2 lg:hidden">
             <Compass className="h-5 w-5 text-primary" />
             <span className="font-semibold text-sm tracking-tight">Riddle Relay</span>
           </div>
+          <div className="hidden lg:block" />
           <div className="flex items-center gap-2">
             <Button
               variant="ghost"
