@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
+import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Compass } from "lucide-react";
+import { Compass, Users, Settings } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
 
 const Auth = () => {
@@ -21,16 +22,48 @@ const Auth = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const { signIn, signUp, signInWithGoogle, user, loading: authLoading } = useAuth();
+  // OAuth role selection state
+  const [showOAuthRoleSelect, setShowOAuthRoleSelect] = useState(false);
+  const [oauthLoading, setOauthLoading] = useState(false);
+
+  const { signIn, signUp, signInWithGoogle, user, profile, loading: authLoading } = useAuth();
   const navigate = useNavigate();
 
-  // Redirect after OAuth callback
+  // Handle OAuth callback — if user exists but has no role set, show role picker
   useEffect(() => {
-    if (!authLoading && user) {
-      const redirectRole = searchParams.get("role") ?? role;
-      navigate(redirectRole === "organizer" ? "/organize" : "/dashboard", { replace: true });
+    if (authLoading || !user) return;
+
+    // Check if this is an OAuth callback (hash fragment present)
+    const isOAuthCallback = window.location.hash.includes("access_token");
+
+    if (isOAuthCallback && profile && !profile.role) {
+      // Profile exists but role not set — show role selection
+      setShowOAuthRoleSelect(true);
+      return;
     }
-  }, [user, authLoading, searchParams, role, navigate]);
+
+    if (profile?.role) {
+      // Role already set, redirect
+      navigate(profile.role === "organizer" ? "/organize" : "/dashboard", { replace: true });
+    }
+  }, [authLoading, user, profile, searchParams, navigate]);
+
+  const handleOAuthRoleSelect = async (selectedRole: "player" | "organizer") => {
+    if (!user) return;
+    setOauthLoading(true);
+    try {
+      const { error: updateError } = await supabase
+        .from("profiles")
+        .update({ role: selectedRole })
+        .eq("id", user.id);
+      if (updateError) throw updateError;
+
+      navigate(selectedRole === "organizer" ? "/organize" : "/dashboard", { replace: true });
+    } catch {
+      setError("Failed to set role. Please try again.");
+      setOauthLoading(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -86,6 +119,48 @@ const Auth = () => {
             </CardDescription>
           </CardHeader>
           <CardContent>
+            {showOAuthRoleSelect ? (
+              /* OAuth role selection after Google callback */
+              <div className="space-y-4">
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground mb-4">How would you like to use Riddle Relay?</p>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    type="button"
+                    disabled={oauthLoading}
+                    onClick={() => handleOAuthRoleSelect("player")}
+                    className={`p-4 rounded-lg border text-left transition-colors ${
+                      oauthLoading
+                        ? "opacity-50 cursor-not-allowed"
+                        : "border-border hover:border-primary hover:bg-primary/5"
+                    }`}
+                  >
+                    <Users className="h-6 w-6 text-primary mb-2" />
+                    <span className="font-medium block">Play</span>
+                    <span className="text-xs text-muted-foreground">Join & compete in events</span>
+                  </button>
+                  <button
+                    type="button"
+                    disabled={oauthLoading}
+                    onClick={() => handleOAuthRoleSelect("organizer")}
+                    className={`p-4 rounded-lg border text-left transition-colors ${
+                      oauthLoading
+                        ? "opacity-50 cursor-not-allowed"
+                        : "border-border hover:border-primary hover:bg-primary/5"
+                    }`}
+                  >
+                    <Settings className="h-6 w-6 text-primary mb-2" />
+                    <span className="font-medium block">Organize</span>
+                    <span className="text-xs text-muted-foreground">Create & manage events</span>
+                  </button>
+                </div>
+                {oauthLoading && (
+                  <p className="text-center text-sm text-muted-foreground">Setting up your account...</p>
+                )}
+              </div>
+            ) : (
+              <>
             {/* Tab toggle */}
             <div className="flex rounded-lg border border-border p-1 mb-6">
               <button
@@ -121,7 +196,7 @@ const Auth = () => {
                 disabled={loading}
                 onClick={async () => {
                   setLoading(true);
-                  const { error } = await signInWithGoogle(role);
+                  const { error } = await signInWithGoogle();
                   if (error) {
                     setError(error);
                     setLoading(false);
@@ -233,6 +308,8 @@ const Auth = () => {
             <p className="mt-4 text-center text-xs text-muted-foreground">
               By continuing, you agree to our Terms of Service and Privacy Policy.
             </p>
+              </>
+            )}
           </CardContent>
         </Card>
       </div>
