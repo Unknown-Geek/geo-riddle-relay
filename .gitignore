@@ -30,3 +30,4 @@ dist-ssr
 
 # Supabase temp files
 supabase/.temp/
+\n.openclaude-profile.json

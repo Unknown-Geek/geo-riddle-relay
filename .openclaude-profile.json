@@ -1,9 +1,0 @@
-{
-  "profile": "openai",
-  "env": {
-    "OPENAI_BASE_URL": "https://api.us-west-2.modal.direct/v1",
-    "OPENAI_MODEL": "zai-org/GLM-5.1-FP8",
-    "OPENAI_API_KEY": "modalresearch_4vTcWZ7ivELuOA_QWBDjnCGqCZui9IF_mbwJgubZXeo"
-  },
-  "createdAt": "2026-04-12T06:42:32.357Z"
-}
