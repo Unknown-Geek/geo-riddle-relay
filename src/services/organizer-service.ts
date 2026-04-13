@@ -70,7 +70,7 @@ export async function createEvent(payload: {
         time_penalty_per_minute: 5,
       },
     })
-    .select()
+    .select("id, name, slug, description, cover_image_url, organizer_id, start_time, end_time, status, settings, invite_code, created_at, updated_at")
     .single();
 
   if (error) throw error;
@@ -87,7 +87,7 @@ export async function updateEvent(eventId: string, updates: Record<string, any>)
     .from("events")
     .update(sanitized)
     .eq("id", eventId)
-    .select()
+    .select("id, name, slug, description, cover_image_url, organizer_id, start_time, end_time, status, settings, invite_code, created_at, updated_at")
     .single();
 
   if (error) throw error;
@@ -174,7 +174,7 @@ export async function createCheckpoint(payload: {
       help_token_hint: payload.helpTokenHint ?? null,
       is_active: true,
     })
-    .select()
+    .select("id, event_id, name, description, latitude, longitude, radius_meters, order_number, clue_text, help_token_hint, is_active, created_at, updated_at")
     .single();
 
   if (error) throw error;
@@ -191,7 +191,7 @@ export async function updateCheckpoint(checkpointId: string, updates: Record<str
     .from("checkpoints")
     .update(sanitized)
     .eq("id", checkpointId)
-    .select()
+    .select("id, event_id, name, description, latitude, longitude, radius_meters, order_number, clue_text, help_token_hint, is_active, created_at, updated_at")
     .single();
 
   if (error) throw error;
@@ -241,7 +241,7 @@ export async function createRiddle(payload: {
       order_number: payload.orderNumber ?? 1,
       is_active: true,
     })
-    .select()
+    .select("id, checkpoint_id, question, correct_answer, max_points, time_penalty_per_minute, order_number, is_active, created_at, updated_at")
     .single();
 
   if (error) throw error;
@@ -258,7 +258,7 @@ export async function updateRiddle(riddleId: string, updates: Record<string, any
     .from("riddles")
     .update(sanitized)
     .eq("id", riddleId)
-    .select()
+    .select("id, checkpoint_id, question, correct_answer, max_points, time_penalty_per_minute, order_number, is_active, created_at, updated_at")
     .single();
 
   if (error) throw error;

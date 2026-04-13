@@ -44,7 +44,7 @@ export async function getEventBySlug(slug: string) {
 export async function getTeamForEvent(eventId: string, userId: string) {
   const { data, error } = await supabase
     .from("team_members")
-    .select("team_id, teams(*)")
+    .select("team_id, teams(id, name, event_id, team_code, current_score, status, help_tokens_used, member_names, team_color, current_checkpoint_id, completed_at, created_at)")
     .eq("user_id", userId)
     .eq("teams.event_id", eventId)
     .single();
@@ -66,7 +66,7 @@ export async function createTeam(eventId: string, userId: string, name: string, 
       team_color: teamColor,
       status: "pending",
     })
-    .select()
+    .select("id, name, event_id, team_code, current_score, status, help_tokens_used, member_names, team_color, current_checkpoint_id, completed_at, created_at")
     .single();
 
   if (error) throw error;
