@@ -1,110 +1,331 @@
-# Welcome to your Lovable project
+# Riddle Relay
 
-## Project info
+GPS-based treasure hunt events. Teams navigate to real-world checkpoints, unlock riddles with GPS, and compete on live leaderboards.
 
-**URL**: https://lovable.dev/projects/5594c08e-c0b2-4908-89db-d1d73698c8d0
+---
 
-## How can I edit this code?
+## Table of Contents
 
-There are several ways of editing your application.
+- [Overview](#overview)
+- [Tech Stack](#tech-stack)
+- [Getting Started](#getting-started)
+- [How It Works](#how-it-works)
+  - [Organizers](#organizers)
+  - [Players](#players)
+- [App Routes](#app-routes)
+- [Project Structure](#project-structure)
+- [Supabase Setup](#supabase-setup)
+- [Edge Functions](#edge-functions)
+- [Environment Variables](#environment-variables)
+- [Deployment](#deployment)
 
-**Use Lovable**
+---
 
-Simply visit the [Lovable Project](https://lovable.dev/projects/5594c08e-c0b2-4908-89db-d1d73698c8d0) and start prompting.
+## Overview
 
-Changes made via Lovable will be committed automatically to this repo.
+Riddle Relay lets you create and play location-based riddle events:
 
-**Use your preferred IDE**
+1. **Organizers** create events, place GPS checkpoints on a map, and write riddles for each checkpoint.
+2. **Players** join events using an invite code, form teams, and navigate to checkpoints.
+3. Riddles only unlock when a team is physically within the checkpoint's GPS radius.
+4. Teams submit answers, earn points, and race against time on a live leaderboard.
 
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
+The app works as a PWA (installable on mobile) with offline tile caching for maps.
 
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
+---
 
-Follow these steps:
+## Tech Stack
 
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+| Layer | Technology |
+|-------|-----------|
+| Frontend | React 18 + TypeScript + Vite |
+| UI | shadcn/ui + Tailwind CSS + Radix UI |
+| Maps | Leaflet + React-Leaflet (OpenStreetMap) |
+| Backend | Supabase (PostgreSQL, Auth, Realtime, Edge Functions) |
+| State | TanStack React Query |
+| Routing | React Router v6 |
+| PWA | vite-plugin-pwa (Workbox) |
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
+---
 
-# Step 3: Install the necessary dependencies.
-npm i
+## Getting Started
 
-# Step 4: Start the development server with auto-reloading and an instant preview.
+### Prerequisites
+
+- Node.js 18+ (use [nvm](https://github.com/nvm-sh/nvm))
+- A [Supabase](https://supabase.com) project
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/Unknown-Geek/geo-riddle-relay.git
+cd geo-riddle-relay
+
+# Install dependencies
+npm install
+
+# Create your .env file (see Environment Variables below)
+cp .env.example .env
+
+# Start the dev server
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+The app runs at `http://localhost:8080`.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
-
-**Use GitHub Codespaces**
-
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
-
-## What technologies are used for this project?
-
-This project is built with:
-
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
-
-## Resetting the database & seeding the admin user
-
-You can wipe test data and recreate the admin account without using the Supabase dashboard by running the bundled seed script. The script requires the Supabase service role key, so **never** commit the key to version control.
+### Build for Production
 
 ```bash
-# Install dependencies if you haven't already
-npm install
+npm run build
+npm run preview  # Preview the production build locally
+```
 
-# Run the seed script (replace the values with your own when needed)
-SUPABASE_URL="https://REDACTED_PROJECT_REF.supabase.co" \
-SUPABASE_SERVICE_ROLE_KEY="<your-service-role-key>" \
-ADMIN_EMAIL="REDACTED_EMAIL" \
-ADMIN_PASSWORD="REDACTED_PASSWORD" \
+---
+
+## How It Works
+
+### Organizers
+
+Organizers create and manage GPS treasure hunt events:
+
+1. **Sign up** as an organizer at `/auth?signup=true&role=organizer`
+2. **Create an event** from the organizer dashboard at `/organize/new`
+   - Fill in event details (name, description, cover image)
+   - Add checkpoints: each checkpoint has a GPS coordinate (lat/lng), a radius in meters, a clue text, and an optional help token hint
+   - Add riddles to each checkpoint with a question, correct answer, and point value
+   - Configure game settings (help tokens per team, max teams, time limit, time penalty)
+3. **Share the invite code** — each event gets a unique 8-character code (e.g., `ABC12345`) that players use to join
+4. **Start the event** — change the event status from "draft" to "active" when ready
+5. **Monitor in real-time** — view teams, scores, and an activity log as the hunt unfolds
+6. **Export results** as CSV when the event is complete
+
+### Players
+
+Players join events and compete as teams:
+
+1. **Sign up** as a player at `/auth?signup=true`
+2. **Join an event** at `/join` — enter the invite code from your organizer
+3. **Create a team** — pick a team name and color. You'll get a unique team code (e.g., `XYZ789`)
+4. **Share the team code** with up to 3 teammates so they can join your team
+5. **Navigate to checkpoints** — the app uses your device's GPS to detect when you're within a checkpoint's radius
+6. **Solve riddles** — once a checkpoint is unlocked, answer the riddles to earn points
+7. **Use help tokens** if you're stuck (limited supply per event)
+8. **Check the leaderboard** to see how your team compares
+
+### Scoring
+
+- Each riddle has a max point value (default: 100)
+- Events have a time limit (default: 180 minutes)
+- After the time limit, a time penalty is deducted per minute (default: 5 pts/min)
+- Help token hints cost nothing but are limited (default: 3 per team)
+
+---
+
+## App Routes
+
+| Route | Access | Description |
+|-------|--------|-------------|
+| `/` | Public | Landing page |
+| `/auth` | Public | Sign in / Sign up (with role selector) |
+| `/join` | Public | Join an event by invite code |
+| `/join/:code` | Public | Direct join link with pre-filled invite code |
+| `/dashboard` | Authenticated | Player game dashboard (map, riddles, submissions) |
+| `/leaderboard` | Authenticated | Live event leaderboard |
+| `/organize` | Organizer | Organizer dashboard — list of your events |
+| `/organize/new` | Organizer | Create a new event (4-step wizard) |
+| `/organize/:slug` | Organizer | Event detail (stats, checkpoints, teams, activity) |
+
+---
+
+## Project Structure
+
+```
+src/
+  components/
+    auth/              # ProtectedRoute, OrganizerRoute guards
+    dashboard/         # CheckpointMap, RiddleList, SubmissionTimeline, TeamSummary
+    layout/            # AppShell, MobileNav, Sidebar, PageHeader
+    ui/                # shadcn/ui components (Button, Card, Input, etc.)
+  contexts/
+    AuthContext.tsx     # Supabase Auth state, sign-in/up/out, password reset
+    EventContext.tsx    # Current event state, event switching
+  hooks/
+    use-geolocation.ts # Browser Geolocation API with permission handling
+    use-mobile.tsx     # Mobile viewport detection
+    use-toast.ts       # Toast notifications
+  integrations/
+    supabase/
+      client.ts        # Supabase client initialization
+      types.ts         # Auto-generated Supabase table types
+  lib/
+    geo.ts             # Geographic calculations (distance, bearing)
+    rate-limit.ts      # Client-side rate limiter
+    validations.ts     # Zod validation schemas
+    utils.ts           # cn() utility for Tailwind class merging
+  pages/
+    Auth.tsx           # Sign in / Sign up
+    Dashboard.tsx       # Player game dashboard
+    JoinEvent.tsx       # Join event flow
+    Landing.tsx        # Public landing page
+    Leaderboard.tsx     # Live leaderboard
+    organizer/
+      CreateEvent.tsx  # 4-step event creation wizard
+      Dashboard.tsx    # Organizer event list
+      EventDetail.tsx  # Event management (tabs: overview, checkpoints, teams, activity)
+  services/
+    organizer-service.ts  # All organizer-facing Supabase queries
+    player-service.ts     # All player-facing Supabase queries + real-time subscriptions
+
+supabase/
+  functions/
+    _shared/
+      auth.ts              # Shared Edge Function auth middleware (JWT verify, CORS, rate limiting)
+    submit-riddle/         # Validate & score riddle answers
+    redeem-help-token/     # Redeem help tokens for hints
+    export-results/        # Export event results as CSV/JSON
+  migrations/
+    20260412000000_multi_event.sql           # Multi-event schema
+    20260413000000_security_fixes.sql        # Security barriers, RLS fixes
+```
+
+---
+
+## Supabase Setup
+
+### Database Schema
+
+The app uses these main tables:
+
+| Table | Purpose |
+|-------|---------|
+| `events` | Event details, settings, invite codes, organizer FK |
+| `checkpoints` | GPS locations, clue text, radius, linked to an event |
+| `riddles` | Questions, answers, points, linked to a checkpoint |
+| `teams` | Team info, score, status, linked to an event |
+| `team_members` | Join table linking users to teams (max 4 per team) |
+| `submissions` | Answer submissions with status (correct/incorrect) and points |
+| `activity_logs` | Real-time event activity feed |
+| `profiles` | User profiles (full_name, avatar_url, role) |
+
+### Row Level Security (RLS)
+
+All tables use Supabase RLS policies:
+- **Players** can only see data for events they've joined via a team
+- **Organizers** can only modify events they own
+- **Correct answers** on riddles are hidden from players via a `player_riddles` view with `security_barrier`
+
+### Running Migrations
+
+Apply migrations through the Supabase Dashboard SQL Editor or the Supabase CLI:
+
+```bash
+supabase db push
+```
+
+---
+
+## Edge Functions
+
+All Edge Functions run on Deno and share common auth middleware from `_shared/auth.ts`:
+
+| Function | Purpose | Auth | Rate Limit |
+|----------|---------|------|------------|
+| `submit-riddle` | Validate answer, calculate points, advance checkpoint | Team member | 20/min |
+| `redeem-help-token` | Spend a help token, reveal the hint | Team member | 10/min |
+| `export-results` | Export event data as CSV or JSON | Organizer | 5/min |
+
+Each function:
+- Verifies the JWT from the Supabase Auth session
+- Validates the user's role (team member or organizer)
+- Validates input with bounds checking
+- Returns CORS headers only for allowlisted origins
+
+---
+
+## Environment Variables
+
+Create a `.env` file in the project root:
+
+```env
+# Required — Supabase project credentials
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-anon-key
+
+# Required for seed script only — DO NOT commit these
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+SUPABASE_ACCESS_TOKEN=your-supabase-access-token
+```
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `VITE_SUPABASE_URL` | Yes | Your Supabase project URL |
+| `VITE_SUPABASE_ANON_KEY` | Yes | Public anon key (safe for client-side) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Seed script only | Service role key — **never** expose client-side |
+| `SUPABASE_ACCESS_TOKEN` | Seed script only | Supabase CLI access token |
+
+---
+
+## Deployment
+
+### Vercel (recommended)
+
+The project includes a `vercel.json` for SPA routing:
+
+```bash
+npm i -g vercel
+vercel
+```
+
+Set the `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` environment variables in your Vercel project settings.
+
+### Netlify
+
+Add a `public/_redirects` file:
+```
+/*    /index.html   200
+```
+
+### Lovable
+
+Open the project on [Lovable](https://lovable.dev) and click Share → Publish.
+
+### Custom Domain
+
+If deploying to a custom domain, add it to the CORS allowlist in `supabase/functions/_shared/auth.ts`:
+
+```ts
+const allowed = [
+  'https://riddle-relay.app',
+  'https://riddle-relay.lovable.app',
+  'https://your-custom-domain.com',  // Add your domain here
+]
+```
+
+---
+
+## Development
+
+```bash
+npm run dev          # Start dev server on :8080
+npm run build        # Production build
+npm run build:dev    # Development build
+npm run preview      # Preview production build
+npm run lint         # Run ESLint
+```
+
+### Seeding an Admin User
+
+```bash
+SUPABASE_URL="https://your-project.supabase.co" \
+SUPABASE_SERVICE_ROLE_KEY="your-service-role-key" \
+ADMIN_EMAIL="admin@example.com" \
+ADMIN_PASSWORD="secure-password" \
 npm run seed:admin
 ```
 
-The script will:
+---
 
-1. Clear gameplay tables (`activity_logs`, `submissions`, `riddles`, `checkpoints`, `teams`).
-2. Delete any existing Supabase Auth user with the provided email.
-3. Recreate the admin auth user (auto-confirmed) and upsert a matching entry in `public.admin_users` with a bcrypt-hashed password.
+## License
 
-Environment variables that can be overridden when running the script:
-
-- `SUPABASE_URL` (defaults to `VITE_SUPABASE_URL` if set)
-- `SUPABASE_SERVICE_ROLE_KEY` (required)
-- `ADMIN_EMAIL` (defaults to `REDACTED_EMAIL`)
-- `ADMIN_PASSWORD` (defaults to `REDACTED_PASSWORD`)
-- `ADMIN_FULL_NAME` (defaults to `Treasure Hunt Admin`)
-- `ADMIN_ROLE` (defaults to `super_admin`)
-
-After the script reports success, you can log in to `/admin` with the seeded credentials.
-
-### Temporary hardcoded bypass
-
-While Supabase credentials are being sorted out, the admin login also checks `VITE_ADMIN_EMAIL` and `VITE_ADMIN_PASSWORD` directly on the client. If both match the submitted credentials, the app short-circuits to the dashboard without hitting Supabase. Remove these env variables (or set them to empty strings) once your Supabase Auth flow is working to disable the bypass.
-
-## How can I deploy this project?
-
-Simply open [Lovable](https://lovable.dev/projects/5594c08e-c0b2-4908-89db-d1d73698c8d0) and click on Share -> Publish.
-
-## Can I connect a custom domain to my Lovable project?
-
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+MIT
