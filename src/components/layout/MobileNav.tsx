@@ -1,6 +1,7 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { Map, Trophy, Users, LayoutDashboard } from "lucide-react";
+import { Map, Trophy, Users, LayoutDashboard, LogOut } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface MobileNavProps {
   role: "player" | "organizer";
@@ -18,6 +19,8 @@ const organizerLinks = [
 
 export function MobileNav({ role }: MobileNavProps) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
   const links = role === "organizer" ? organizerLinks : playerLinks;
 
   return (
@@ -41,6 +44,13 @@ export function MobileNav({ role }: MobileNavProps) {
             </Link>
           );
         })}
+        <button
+          onClick={async () => { await signOut(); navigate("/"); }}
+          className="flex flex-col items-center justify-center gap-0.5 w-full h-full text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <LogOut className="h-5 w-5" />
+          <span>Sign out</span>
+        </button>
       </div>
     </nav>
   );

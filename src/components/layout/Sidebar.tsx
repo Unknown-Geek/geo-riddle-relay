@@ -1,7 +1,8 @@
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
-import { Map, Trophy, Users, Settings, Compass, LayoutDashboard } from "lucide-react";
+import { Map, Trophy, Users, Settings, Compass, LayoutDashboard, LogOut } from "lucide-react";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface NavItem {
   label: string;
@@ -28,6 +29,8 @@ interface SidebarProps {
 
 export function Sidebar({ role, eventName }: SidebarProps) {
   const location = useLocation();
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
   const items = role === "organizer" ? organizerNav : playerNav;
 
   return (
@@ -71,6 +74,13 @@ export function Sidebar({ role, eventName }: SidebarProps) {
       {/* Footer */}
       <div className="p-3 border-t border-border flex items-center justify-between">
         <ThemeToggle />
+        <button
+          onClick={async () => { await signOut(); navigate("/"); }}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <LogOut className="h-4 w-4" />
+          Sign out
+        </button>
       </div>
     </aside>
   );

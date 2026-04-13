@@ -39,7 +39,7 @@ const Auth = () => {
 
     try {
       if (tab === "signup") {
-        const { error: signUpError } = await signUp(email, password, fullName);
+        const { error: signUpError } = await signUp(email, password, fullName, role);
         if (signUpError) {
           setError(signUpError);
           return;
