@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#5E6AD2"/>
+  <g transform="translate(256,256)">
+    <!-- Compass/Map pin shape -->
+    <path d="M0-120c-55 0-100 45-100 100 0 75 100 180 100 180s100-105 100-180c0-55-45-100-100-100z" fill="#fff" opacity="0.95"/>
+    <circle cy="-20" r="40" fill="#5E6AD2"/>
+    <!-- Question mark for riddle -->
+    <text y="-8" text-anchor="middle" fill="#fff" font-family="Arial,sans-serif" font-weight="700" font-size="48">?</text>
+  </g>
+</svg>

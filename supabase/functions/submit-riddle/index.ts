@@ -1,19 +1,44 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { authenticateUser, verifyTeamMembership, getCorsHeaders } from '../_shared/auth.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+// In-memory rate limiter (per Deno isolate)
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
+
+function checkRateLimit(key: string, maxCalls: number, windowMs: number): boolean {
+  const now = Date.now()
+  const entry = rateLimitMap.get(key)
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(key, { count: 1, resetAt: now + windowMs })
+    return true
+  }
+  if (entry.count >= maxCalls) return false
+  entry.count++
+  return true
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
+  const corsHeaders = getCorsHeaders(req)
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const { teamId, riddleId, checkpointId, answer, latitude, longitude } = await req.json()
+    // --- Auth check ---
+    const { userId, supabase, error: authError } = await authenticateUser(req)
+    if (authError) return authError
+
+    // --- Rate limit: 20 submissions per minute per user ---
+    if (!checkRateLimit(`submit:${userId}`, 20, 60_000)) {
+      return new Response(
+        JSON.stringify({ error: 'Rate limit exceeded. Please wait a moment.' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // --- Validate input ---
+    const body = await req.json()
+    const { teamId, riddleId, checkpointId, answer, latitude, longitude } = body
 
     if (!teamId || !riddleId || !checkpointId || !answer) {
       return new Response(
@@ -22,11 +47,23 @@ serve(async (req) => {
       )
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseKey)
+    if (typeof answer !== 'string' || answer.trim().length === 0 || answer.length > 500) {
+      return new Response(
+        JSON.stringify({ error: 'Invalid answer format' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
-    // Fetch the riddle to check the answer
+    // --- Verify team membership ---
+    const isMember = await verifyTeamMembership(supabase, teamId, userId)
+    if (!isMember) {
+      return new Response(
+        JSON.stringify({ error: 'You are not a member of this team' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // --- Fetch the riddle ---
     const { data: riddle, error: riddleError } = await supabase
       .from('riddles')
       .select('correct_answer, max_points, is_active')
@@ -47,7 +84,7 @@ serve(async (req) => {
       )
     }
 
-    // Check if team already solved this riddle correctly
+    // --- Check if already solved ---
     const { data: existingCorrect } = await supabase
       .from('submissions')
       .select('id')
@@ -63,12 +100,12 @@ serve(async (req) => {
       )
     }
 
-    // Compare answer (case-insensitive, trimmed)
+    // --- Compare answer ---
     const normalizedAnswer = answer.trim().toLowerCase()
     const normalizedCorrect = riddle.correct_answer.trim().toLowerCase()
     const isCorrect = normalizedAnswer === normalizedCorrect
 
-    // Calculate distance from checkpoint if coordinates provided
+    // --- Calculate distance ---
     let distanceFromCheckpoint = null
     if (latitude && longitude) {
       const { data: checkpoint } = await supabase
@@ -78,7 +115,7 @@ serve(async (req) => {
         .single()
 
       if (checkpoint) {
-        const R = 6371000 // Earth radius in meters
+        const R = 6371000
         const toRad = (v: number) => (v * Math.PI) / 180
         const dLat = toRad(checkpoint.latitude - latitude)
         const dLon = toRad(checkpoint.longitude - longitude)
@@ -92,7 +129,7 @@ serve(async (req) => {
     const submissionStatus = isCorrect ? 'correct' : 'incorrect'
     const pointsAwarded = isCorrect ? (riddle.max_points || 100) : 0
 
-    // Insert the submission
+    // --- Insert submission ---
     const { data: submission, error: insertError } = await supabase
       .from('submissions')
       .insert({
@@ -106,7 +143,7 @@ serve(async (req) => {
         longitude: longitude || null,
         distance_from_checkpoint: distanceFromCheckpoint,
       })
-      .select()
+      .select('id, team_id, riddle_id, checkpoint_id, submitted_answer, status, points_awarded, latitude, longitude, distance_from_checkpoint, help_token_used, submitted_at')
       .single()
 
     if (insertError) {
@@ -117,9 +154,8 @@ serve(async (req) => {
       )
     }
 
-    // If correct, update team score and checkpoint progress
+    // --- Update team on correct answer ---
     if (isCorrect) {
-      // Fetch current team data
       const { data: team } = await supabase
         .from('teams')
         .select('current_score, current_checkpoint_id, status')
@@ -146,21 +182,20 @@ serve(async (req) => {
         const solvedRiddleIds = new Set((correctSubmissions || []).map(s => s.riddle_id))
         const allSolved = (checkpointRiddles || []).every(r => solvedRiddleIds.has(r.id))
 
-        // Find next checkpoint
         let nextCheckpointId = team.current_checkpoint_id
         let newStatus = team.status
 
         if (allSolved) {
+          const { data: currentCp } = await supabase
+            .from('checkpoints')
+            .select('order_number')
+            .eq('id', checkpointId)
+            .single()
+
           const { data: nextCheckpoint } = await supabase
             .from('checkpoints')
             .select('id')
-            .gt('order_number', await supabase
-              .from('checkpoints')
-              .select('order_number')
-              .eq('id', checkpointId)
-              .single()
-              .then(r => r.data?.order_number || 0)
-            )
+            .gt('order_number', currentCp?.order_number || 0)
             .eq('is_active', true)
             .order('order_number', { ascending: true })
             .limit(1)
@@ -169,11 +204,9 @@ serve(async (req) => {
           if (nextCheckpoint) {
             nextCheckpointId = nextCheckpoint.id
           } else {
-            // No more checkpoints - team has completed!
             newStatus = 'completed'
           }
 
-          // Activate team if still pending
           if (team.status === 'pending') {
             newStatus = 'active'
           }
@@ -181,8 +214,7 @@ serve(async (req) => {
           newStatus = 'active'
         }
 
-        // Update team
-        const updatePayload: Record<string, any> = {
+        const updatePayload: Record<string, unknown> = {
           current_score: newScore,
         }
 
@@ -207,12 +239,12 @@ serve(async (req) => {
         metadata: { riddle_id: riddleId, checkpoint_id: checkpointId, points: pointsAwarded },
       })
     } else {
-      // Log incorrect attempt
+      // Log incorrect attempt (omit the raw answer from logs)
       await supabase.from('activity_logs').insert({
         team_id: teamId,
         action_type: 'submission',
         description: 'Team submitted an incorrect answer',
-        metadata: { riddle_id: riddleId, checkpoint_id: checkpointId, answer: answer.trim() },
+        metadata: { riddle_id: riddleId, checkpoint_id: checkpointId },
       })
     }
 
@@ -221,9 +253,7 @@ serve(async (req) => {
         success: true,
         status: submissionStatus,
         points_awarded: pointsAwarded,
-        message: isCorrect
-          ? 'Correct! Well done!'
-          : 'Incorrect answer. Try again!',
+        message: isCorrect ? 'Correct! Well done!' : 'Incorrect answer. Try again!',
         submission,
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

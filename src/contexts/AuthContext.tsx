@@ -18,6 +18,21 @@ interface AuthContextType {
   signUp: (email: string, password: string, fullName: string) => Promise<{ error: string | null }>;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  resetPassword: (email: string) => Promise<{ error: string | null }>;
+  updatePassword: (newPassword: string) => Promise<{ error: string | null }>;
+  resendVerification: () => Promise<{ error: string | null }>;
+}
+
+// Map raw Supabase errors to generic user-facing messages
+function sanitizeAuthError(message: string): string {
+  const lower = message.toLowerCase();
+  if (lower.includes("invalid login credentials")) return "Invalid email or password";
+  if (lower.includes("email not confirmed")) return "Please verify your email before signing in";
+  if (lower.includes("user already registered")) return "An account with this email already exists";
+  if (lower.includes("password should be")) return "Password does not meet requirements";
+  if (lower.includes("signup is disabled")) return "Registration is currently disabled";
+  if (lower.includes("rate limit")) return "Too many attempts. Please wait a moment.";
+  return "Authentication failed. Please try again.";
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -29,7 +44,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Get initial session
     supabase.auth.getSession().then(({ data: { session: s } }) => {
       setSession(s);
       setUser(s?.user ?? null);
@@ -40,7 +54,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
     });
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (_event, s) => {
         setSession(s);
@@ -61,7 +74,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const { data, error } = await supabase
         .from("profiles")
-        .select("*")
+        .select("id, full_name, avatar_url, role, created_at")
         .eq("id", userId)
         .single();
 
@@ -85,10 +98,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         },
       });
 
-      if (error) return { error: error.message };
+      if (error) return { error: sanitizeAuthError(error.message) };
       return { error: null };
-    } catch (err: any) {
-      return { error: err.message ?? "Sign up failed" };
+    } catch {
+      return { error: "Sign up failed. Please try again." };
     }
   };
 
@@ -99,10 +112,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         password,
       });
 
-      if (error) return { error: error.message };
+      if (error) return { error: sanitizeAuthError(error.message) };
       return { error: null };
-    } catch (err: any) {
-      return { error: err.message ?? "Sign in failed" };
+    } catch {
+      return { error: "Sign in failed. Please try again." };
     }
   };
 
@@ -113,6 +126,40 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setProfile(null);
   };
 
+  const resetPassword = async (email: string) => {
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth?reset=true`,
+      });
+      if (error) return { error: sanitizeAuthError(error.message) };
+      return { error: null };
+    } catch {
+      return { error: "Password reset failed. Please try again." };
+    }
+  };
+
+  const updatePassword = async (newPassword: string) => {
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) return { error: sanitizeAuthError(error.message) };
+      return { error: null };
+    } catch {
+      return { error: "Password update failed. Please try again." };
+    }
+  };
+
+  const resendVerification = async () => {
+    try {
+      const email = user?.email;
+      if (!email) return { error: "No email on file" };
+      const { error } = await supabase.auth.resend({ type: "signup", email });
+      if (error) return { error: sanitizeAuthError(error.message) };
+      return { error: null };
+    } catch {
+      return { error: "Failed to resend verification. Please try again." };
+    }
+  };
+
   const value = {
     user,
     session,
@@ -121,6 +168,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     signUp,
     signIn,
     signOut,
+    resetPassword,
+    updatePassword,
+    resendVerification,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

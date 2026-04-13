@@ -5,10 +5,34 @@ import type { Tables } from "@/integrations/supabase/types";
 // Event management
 // ============================================
 
+const EVENT_UPDATEABLE_FIELDS = [
+  "name", "description", "cover_image_url", "status", "start_time", "end_time", "settings",
+] as const;
+
+const CHECKPOINT_UPDATEABLE_FIELDS = [
+  "name", "description", "latitude", "longitude", "radius_meters", "order_number",
+  "clue_text", "help_token_hint", "is_active",
+] as const;
+
+const RIDDLE_UPDATEABLE_FIELDS = [
+  "question", "correct_answer", "max_points", "time_penalty_per_minute",
+  "order_number", "is_active",
+] as const;
+
+function pickAllowed<T extends string>(input: Record<string, unknown>, allowed: readonly T[]): Record<string, unknown> {
+  const result: Record<string, unknown> = {};
+  for (const key of allowed) {
+    if (key in input) {
+      result[key] = input[key];
+    }
+  }
+  return result;
+}
+
 export async function getOrganizerEvents(organizerId: string) {
   const { data, error } = await supabase
     .from("events")
-    .select("*")
+    .select("id, name, slug, description, cover_image_url, organizer_id, start_time, end_time, status, settings, invite_code, created_at, updated_at")
     .eq("organizer_id", organizerId)
     .order("created_at", { ascending: false });
 
@@ -23,7 +47,6 @@ export async function createEvent(payload: {
   organizerId: string;
   settings?: Record<string, any>;
 }) {
-  // Generate slug from name
   const slug = payload.name
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, "")
@@ -55,9 +78,14 @@ export async function createEvent(payload: {
 }
 
 export async function updateEvent(eventId: string, updates: Record<string, any>) {
+  const sanitized = pickAllowed(updates, EVENT_UPDATEABLE_FIELDS);
+  if (Object.keys(sanitized).length === 0) {
+    throw new Error("No valid fields to update");
+  }
+
   const { data, error } = await supabase
     .from("events")
-    .update(updates)
+    .update(sanitized)
     .eq("id", eventId)
     .select()
     .single();
@@ -113,7 +141,7 @@ export async function getEventStats(eventId: string) {
 export async function getEventCheckpoints(eventId: string) {
   const { data, error } = await supabase
     .from("checkpoints")
-    .select("*")
+    .select("id, event_id, name, description, latitude, longitude, radius_meters, order_number, clue_text, help_token_hint, is_active, created_at, updated_at")
     .eq("event_id", eventId)
     .order("order_number", { ascending: true });
 
@@ -154,9 +182,14 @@ export async function createCheckpoint(payload: {
 }
 
 export async function updateCheckpoint(checkpointId: string, updates: Record<string, any>) {
+  const sanitized = pickAllowed(updates, CHECKPOINT_UPDATEABLE_FIELDS);
+  if (Object.keys(sanitized).length === 0) {
+    throw new Error("No valid fields to update");
+  }
+
   const { data, error } = await supabase
     .from("checkpoints")
-    .update(updates)
+    .update(sanitized)
     .eq("id", checkpointId)
     .select()
     .single();
@@ -181,7 +214,7 @@ export async function deleteCheckpoint(checkpointId: string) {
 export async function getCheckpointRiddles(checkpointId: string) {
   const { data, error } = await supabase
     .from("riddles")
-    .select("*")
+    .select("id, checkpoint_id, question, correct_answer, max_points, time_penalty_per_minute, order_number, is_active, created_at, updated_at")
     .eq("checkpoint_id", checkpointId)
     .order("order_number", { ascending: true });
 
@@ -216,9 +249,14 @@ export async function createRiddle(payload: {
 }
 
 export async function updateRiddle(riddleId: string, updates: Record<string, any>) {
+  const sanitized = pickAllowed(updates, RIDDLE_UPDATEABLE_FIELDS);
+  if (Object.keys(sanitized).length === 0) {
+    throw new Error("No valid fields to update");
+  }
+
   const { data, error } = await supabase
     .from("riddles")
-    .update(updates)
+    .update(sanitized)
     .eq("id", riddleId)
     .select()
     .single();
@@ -243,7 +281,7 @@ export async function deleteRiddle(riddleId: string) {
 export async function getEventTeams(eventId: string) {
   const { data, error } = await supabase
     .from("teams")
-    .select("*, team_members(count)")
+    .select("id, name, team_code, current_score, status, help_tokens_used, member_names, created_at, completed_at, team_color, team_members(count)")
     .eq("event_id", eventId)
     .order("created_at", { ascending: true });
 
@@ -291,7 +329,7 @@ export async function resetEventScores(eventId: string) {
 export async function getEventActivityLogs(eventId: string) {
   const { data, error } = await supabase
     .from("activity_logs")
-    .select("*")
+    .select("id, event_id, team_id, action_type, description, metadata, created_at")
     .eq("event_id", eventId)
     .order("created_at", { ascending: false })
     .limit(100);

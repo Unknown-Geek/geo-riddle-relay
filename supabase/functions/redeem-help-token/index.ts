@@ -1,18 +1,44 @@
 import { serve } from 'https://deno.land/std@0.177.0/http/server.ts'
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { authenticateUser, verifyTeamMembership, getCorsHeaders } from '../_shared/auth.ts'
 
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
+// In-memory rate limiter (per Deno isolate)
+const rateLimitMap = new Map<string, { count: number; resetAt: number }>()
+
+function checkRateLimit(key: string, maxCalls: number, windowMs: number): boolean {
+  const now = Date.now()
+  const entry = rateLimitMap.get(key)
+  if (!entry || now > entry.resetAt) {
+    rateLimitMap.set(key, { count: 1, resetAt: now + windowMs })
+    return true
+  }
+  if (entry.count >= maxCalls) return false
+  entry.count++
+  return true
 }
 
 serve(async (req) => {
+  const corsHeaders = getCorsHeaders(req)
+
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
 
   try {
-    const { teamId, checkpointId, riddleId } = await req.json()
+    // --- Auth check ---
+    const { userId, supabase, error: authError } = await authenticateUser(req)
+    if (authError) return authError
+
+    // --- Rate limit: 10 redemptions per minute per user ---
+    if (!checkRateLimit(`redeem:${userId}`, 10, 60_000)) {
+      return new Response(
+        JSON.stringify({ error: 'Rate limit exceeded. Please wait a moment.' }),
+        { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // --- Validate input ---
+    const body = await req.json()
+    const { teamId, checkpointId, riddleId } = body
 
     if (!teamId || !checkpointId || !riddleId) {
       return new Response(
@@ -21,14 +47,19 @@ serve(async (req) => {
       )
     }
 
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!
-    const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    const supabase = createClient(supabaseUrl, supabaseKey)
+    // --- Verify team membership ---
+    const isMember = await verifyTeamMembership(supabase, teamId, userId)
+    if (!isMember) {
+      return new Response(
+        JSON.stringify({ error: 'You are not a member of this team' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
 
-    // Check team's help tokens used
+    // --- Check team's help tokens ---
     const { data: team, error: teamError } = await supabase
       .from('teams')
-      .select('help_tokens_used, name')
+      .select('help_tokens_used, name, event_id')
       .eq('id', teamId)
       .single()
 
@@ -39,14 +70,14 @@ serve(async (req) => {
       )
     }
 
-    // Check max help tokens from game settings
-    const { data: setting } = await supabase
-      .from('game_settings')
-      .select('setting_value')
-      .eq('setting_key', 'help_tokens_per_team')
+    // Get max help tokens from event settings
+    const { data: event } = await supabase
+      .from('events')
+      .select('settings')
+      .eq('id', team.event_id)
       .single()
 
-    const maxTokens = setting ? parseInt(setting.setting_value) : 3
+    const maxTokens = event?.settings?.help_tokens_per_team ?? 3
 
     if ((team.help_tokens_used || 0) >= maxTokens) {
       return new Response(
@@ -55,7 +86,7 @@ serve(async (req) => {
       )
     }
 
-    // Check if a help token was already used for this specific riddle
+    // --- Check if already redeemed for this riddle ---
     const { data: existingHelp } = await supabase
       .from('submissions')
       .select('id')
@@ -65,7 +96,6 @@ serve(async (req) => {
       .maybeSingle()
 
     if (existingHelp) {
-      // Already used help for this riddle - return the hint again
       const { data: checkpoint } = await supabase
         .from('checkpoints')
         .select('help_token_hint')
@@ -81,7 +111,7 @@ serve(async (req) => {
       )
     }
 
-    // Get the checkpoint hint
+    // --- Get the hint ---
     const { data: checkpoint } = await supabase
       .from('checkpoints')
       .select('help_token_hint')
@@ -95,16 +125,17 @@ serve(async (req) => {
       )
     }
 
-    // Increment help_tokens_used
+    // --- Increment help_tokens_used ---
     const newTokensUsed = (team.help_tokens_used || 0) + 1
     await supabase
       .from('teams')
       .update({ help_tokens_used: newTokensUsed })
       .eq('id', teamId)
 
-    // Log activity
+    // --- Log activity ---
     await supabase.from('activity_logs').insert({
       team_id: teamId,
+      event_id: team.event_id,
       action_type: 'help_token',
       description: `Team "${team.name}" redeemed a help token`,
       metadata: { riddle_id: riddleId, checkpoint_id: checkpointId, tokens_used: newTokensUsed },
